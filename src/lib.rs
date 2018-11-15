@@ -10,6 +10,8 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+#[cfg(feature = "with-slog")]
+extern crate chrono;
 #[cfg(feature = "with-diesel")]
 extern crate diesel;
 extern crate prometheus;
