@@ -27,3 +27,14 @@ pub fn default_json_drain() -> slog_async::Async {
   }
   slog_async::Async::default(log_builder.build())
 }
+
+pub fn default_root_logger(process_name: &'static str) -> slog::Logger {
+  let drain = default_json_drain();
+  slog::Logger::root(
+    drain.fuse(),
+    slog_o!(
+      "version" => option_env!("VERSION").unwrap_or("UNKNOWN"),
+      "process" => process_name,
+    ),
+  )
+}
