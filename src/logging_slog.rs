@@ -4,7 +4,7 @@ use slog_async;
 use slog_json;
 use std::env;
 
-pub fn default_json_drain() -> impl Drain {
+pub fn default_json_drain() -> slog_async::Async {
   let drain = slog_json::Json::new(std::io::stdout())
     .add_key_value(slog_o!(
         "msg" => slog::PushFnValue(move |record : &slog::Record, ser| {
