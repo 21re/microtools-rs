@@ -10,7 +10,24 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+#[cfg(feature = "with-diesel")]
+extern crate diesel;
 extern crate prometheus;
+#[cfg(feature = "with-diesel")]
+extern crate r2d2;
+#[cfg(feature = "with-slog")]
+extern crate slog;
+#[cfg(feature = "with-slog")]
+extern crate slog_async;
+#[cfg(feature = "with-slog")]
+extern crate slog_envlogger;
+#[cfg(feature = "with-slog")]
+extern crate slog_json;
+#[cfg(feature = "with-slog")]
+extern crate slog_scope;
+#[cfg(feature = "with-slog")]
+extern crate slog_stdlog;
+#[cfg(feature = "with-toml")]
 extern crate toml;
 
 #[cfg(test)]
@@ -22,6 +39,8 @@ pub mod elasticsearch;
 #[cfg(test)]
 pub mod elasticsearch_test;
 pub mod gatekeeper;
+#[cfg(feature = "with-slog")]
+pub mod logging_slog;
 pub mod metrics;
 pub mod parse_request;
 mod problem;

@@ -2,7 +2,6 @@ use actix;
 use actix_web;
 use serde_json;
 use std;
-use toml;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Problem {
@@ -199,8 +198,9 @@ impl From<actix::MailboxError> for Problem {
   }
 }
 
-impl From<toml::de::Error> for Problem {
-  fn from(error: toml::de::Error) -> Self {
+#[cfg(feature = "with-toml")]
+impl From<::toml::de::Error> for Problem {
+  fn from(error: ::toml::de::Error) -> Self {
     error!("Toml: {}", error);
 
     Problem::internal_server_error().with_details(format!("Toml: {}", error))
@@ -212,5 +212,23 @@ impl From<serde_json::Error> for Problem {
     error!("Json: {}", error);
 
     Problem::internal_server_error().with_details(format!("Json: {}", error))
+  }
+}
+
+#[cfg(feature = "with-diesel")]
+impl From<::r2d2::Error> for Problem {
+  fn from(error: ::r2d2::Error) -> Self {
+    error!("R2D2: {}", error);
+
+    Problem::internal_server_error().with_details(format!("R2D2: {}", error))
+  }
+}
+
+#[cfg(feature = "with-diesel")]
+impl From<::diesel::result::Error> for Problem {
+  fn from(error: ::diesel::result::Error) -> Self {
+    error!("Diesel result: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Diesel result: {}", error))
   }
 }
