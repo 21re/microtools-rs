@@ -83,6 +83,11 @@ impl QueryRequest {
     self
   }
 
+  pub fn with_from(mut self, from: u64) -> Self {
+    self.from = Some(from);
+    self
+  }
+
   pub fn with_size(mut self, size: u64) -> Self {
     self.size = Some(size);
     self
