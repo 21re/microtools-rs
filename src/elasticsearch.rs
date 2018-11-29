@@ -51,7 +51,7 @@ impl From<String> for Value {
   }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Default)]
 pub struct QueryRequest {
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub sort: Vec<Sort>,
@@ -129,17 +129,17 @@ pub struct BoolQuery {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sort {
-  field: String, 
+  field: String,
   order: SortOrder,
 }
 
 impl Sort {
-  fn new<F : Into<String>>(field: F, order: SortOrder) -> Sort {
+  fn new<F: Into<String>>(field: F, order: SortOrder) -> Sort {
     Sort {
       field: field.into(),
       order,
     }
-  } 
+  }
 }
 
 impl Serialize for Sort {
@@ -172,8 +172,11 @@ impl<'de> Deserialize<'de> for Sort {
       where
         V: MapAccess<'de>,
       {
-        while let Some(field) = map.next_key()? {
-          return Ok(Sort { field, order: map.next_value()? });
+        if let Some(field) = map.next_key()? {
+          return Ok(Sort {
+            field,
+            order: map.next_value()?,
+          });
         }
         Err(::serde::de::Error::missing_field("field"))
       }

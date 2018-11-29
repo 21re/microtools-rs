@@ -28,7 +28,9 @@ fn test_prefix_query() {
 
 #[test]
 fn test_sort_without_query() {
-  let query = QueryRequest::new().with_sort("test1", SortOrder::Asc).with_sort("test2", SortOrder::Desc);
+  let query = QueryRequest::new()
+    .with_sort("test1", SortOrder::Asc)
+    .with_sort("test2", SortOrder::Desc);
   let json = serde_json::to_string(&query).unwrap();
 
   assert_that(&json.as_str()).is_equal_to(r#"{"sort":[{"test1":"asc"},{"test2":"desc"}]}"#);

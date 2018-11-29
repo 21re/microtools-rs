@@ -31,6 +31,7 @@ extern crate slog_scope;
 extern crate slog_stdlog;
 #[cfg(feature = "with-toml")]
 extern crate toml;
+extern crate url;
 
 #[cfg(test)]
 extern crate spectral;
@@ -51,6 +52,8 @@ pub mod retry;
 mod retry_tests;
 pub mod serde_field_value;
 pub mod service_requester;
+#[cfg(test)]
+mod service_requester_test;
 pub mod status;
 pub mod subject;
 pub mod types;
