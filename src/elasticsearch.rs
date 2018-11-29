@@ -3,9 +3,11 @@ use super::{IntoClientRequest, Problem};
 use actix_web::client::{ClientRequest, ClientRequestBuilder};
 use bytes::Bytes;
 use futures::stream;
-use serde::Serialize;
+use serde::de::{MapAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::to_vec;
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
@@ -49,9 +51,12 @@ impl From<String> for Value {
   }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct QueryRequest {
-  pub query: Query,
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub sort: Vec<Sort>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub query: Option<Query>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub from: Option<u64>,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,12 +64,23 @@ pub struct QueryRequest {
 }
 
 impl QueryRequest {
-  pub fn new(query: Query) -> QueryRequest {
+  pub fn new() -> QueryRequest {
     QueryRequest {
-      query,
+      sort: Vec::new(),
+      query: None,
       from: None,
       size: None,
     }
+  }
+
+  pub fn with_query(mut self, query: Query) -> Self {
+    self.query = Some(query);
+    self
+  }
+
+  pub fn with_sort<F: Into<String>>(mut self, field: F, order: SortOrder) -> Self {
+    self.sort.push(Sort::new(field, order));
+    self
   }
 
   pub fn with_size(mut self, size: u64) -> Self {
@@ -104,6 +120,69 @@ pub struct BoolQuery {
   #[serde(default)]
   pub should: Vec<Query>,
   pub minimum_should_match: Option<i32>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Sort {
+  field: String, 
+  order: SortOrder,
+}
+
+impl Sort {
+  fn new<F : Into<String>>(field: F, order: SortOrder) -> Sort {
+    Sort {
+      field: field.into(),
+      order,
+    }
+  } 
+}
+
+impl Serialize for Sort {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    use serde::ser::SerializeMap;
+    let mut map = serializer.serialize_map(Some(1))?;
+    map.serialize_entry(&self.field, &self.order)?;
+    map.end()
+  }
+}
+
+impl<'de> Deserialize<'de> for Sort {
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    struct FieldVisitor;
+
+    impl<'de> Visitor<'de> for FieldVisitor {
+      type Value = Sort;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("sort object")
+      }
+
+      fn visit_map<V>(self, mut map: V) -> Result<Sort, V::Error>
+      where
+        V: MapAccess<'de>,
+      {
+        while let Some(field) = map.next_key()? {
+          return Ok(Sort { field, order: map.next_value()? });
+        }
+        Err(::serde::de::Error::missing_field("field"))
+      }
+    }
+
+    deserializer.deserialize_map(FieldVisitor)
+  }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SortOrder {
+  Asc,
+  Desc,
 }
 
 #[derive(Clone, Debug, Deserialize)]
