@@ -250,7 +250,7 @@ pub struct BulkActionResponse {
   #[serde(rename = "_id")]
   id: String,
   status: u16,
-  result: String,
+  result: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
