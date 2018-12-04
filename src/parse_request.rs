@@ -9,7 +9,7 @@ use std::fmt;
 use std::ops::Deref;
 
 pub struct ValidatedJsonConfig {
-  limit: usize,
+  pub limit: usize,
 }
 
 impl Default for ValidatedJsonConfig {
@@ -100,7 +100,7 @@ macro_rules! request_parameter {
 }
 
 pub struct LimitedRawConfig {
-  limit: usize,
+  pub limit: usize,
 }
 
 impl Default for LimitedRawConfig {
