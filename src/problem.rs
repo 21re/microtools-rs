@@ -110,6 +110,14 @@ impl From<std::time::SystemTimeError> for Problem {
   }
 }
 
+impl From<std::str::Utf8Error> for Problem {
+  fn from(error: std::str::Utf8Error) -> Problem {
+    error!("UTF-8 error: {}", error);
+
+    Problem::bad_request().with_details(format!("UTF-8 error: {}", error))
+  }
+}
+
 impl From<actix_web::error::Error> for Problem {
   fn from(error: actix_web::Error) -> Problem {
     error!("Actix: {}", error);
