@@ -1,7 +1,7 @@
 use actix_web::client;
 use actix_web::HttpMessage;
 use business_result::AsyncBusinessResult;
-use futures::{Future, Poll, Stream};
+use futures::{future, Async, Future, Poll, Stream};
 use problem::Problem;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
@@ -23,6 +23,7 @@ pub trait FromClientResponse {
 pub enum WSTry<F> {
   MayBeSuccess(F),
   Failure(Problem),
+  FutureFailure(Box<Future<Item = Problem, Error = Problem>>),
 }
 
 impl<T, F> Future for WSTry<F>
@@ -36,6 +37,11 @@ where
     match self {
       WSTry::MayBeSuccess(f) => f.poll(),
       WSTry::Failure(problem) => Err(problem.clone()),
+      WSTry::FutureFailure(future_problem) => match future_problem.poll() {
+        Ok(Async::NotReady) => Ok(Async::NotReady),
+        Ok(Async::Ready(problem)) => Err(problem),
+        Err(problem) => Err(problem),
+      },
     }
   }
 }
@@ -70,7 +76,16 @@ where
   T: FromClientResponse<Result = T, FutureResult = F>,
   F: Future<Item = T, Error = Problem>,
 {
-  expect_success_with_error(request, default_error_handler)
+  try(request).and_then(move |resp| {
+    if resp.status().is_success() {
+      WSTry::MayBeSuccess(T::from_response(resp))
+    } else {
+      WSTry::Failure(Problem::for_status(
+        resp.status().as_u16(),
+        format!("Service request failed: {}", resp.status()),
+      ))
+    }
+  })
 }
 
 pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> impl Future<Item = T, Error = Problem>
@@ -78,23 +93,23 @@ where
   R: IntoClientRequest,
   T: FromClientResponse<Result = T, FutureResult = F>,
   F: Future<Item = T, Error = Problem>,
-  E: Fn(client::ClientResponse) -> Problem,
+  E: Fn(client::ClientResponse) -> Box<Future<Item = Problem, Error = Problem>>,
 {
   try(request).and_then(move |resp| {
     if resp.status().is_success() {
       WSTry::MayBeSuccess(T::from_response(resp))
     } else {
-      WSTry::Failure(error_handler(resp))
+      WSTry::FutureFailure(error_handler(resp))
     }
   })
 }
 
 #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
-pub fn default_error_handler(response: client::ClientResponse) -> Problem {
-  Problem::for_status(
+pub fn default_error_handler(response: client::ClientResponse) -> Box<Future<Item = Problem, Error = Problem>> {
+  Box::new(future::ok(Problem::for_status(
     response.status().as_u16(),
     format!("Service request failed: {}", response.status()),
-  )
+  )))
 }
 
 impl IntoClientRequest for client::ClientRequest {
