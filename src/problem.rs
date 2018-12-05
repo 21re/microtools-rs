@@ -50,6 +50,10 @@ impl Problem {
     Self::for_status(405, "Method not allowed")
   }
 
+  pub fn failed_dependency() -> Problem {
+    Self::for_status(424, "Failed dependency")
+  }
+
   pub fn with_details<T: std::fmt::Display>(mut self, details: T) -> Problem {
     self.details = match self.details {
       Some(existing) => Some(format!("{}: {}", existing, details)),
