@@ -84,9 +84,11 @@ impl ServiceRequester {
   }
 
   #[inline]
-  pub fn delete<U, F>(&self, url: U) -> impl Future<Item = (), Error = Problem>
+  pub fn delete<U, F, O>(&self, url: U) -> impl Future<Item = O, Error = Problem>
   where
     U: AsRef<str>,
+    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
+    F: Future<Item = O, Error = Problem>,
   {
     self.without_body(http::Method::DELETE, url)
   }
