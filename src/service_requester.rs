@@ -15,7 +15,7 @@ pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
 #[derive(Clone)]
 pub struct ServiceRequester {
   token_creator: Addr<gatekeeper::TokenCreator>,
-  error_handler: &'static Fn(client::ClientResponse) -> Problem,
+  error_handler: &'static (Fn(client::ClientResponse) -> Problem + Sync),
 }
 
 pub trait IntoClientRequest {
@@ -30,7 +30,7 @@ impl ServiceRequester {
     }
   }
 
-  pub fn with_error_handler(&self, error_handler: &'static Fn(client::ClientResponse) -> Problem) -> Self {
+  pub fn with_error_handler(&self, error_handler: &'static (Fn(client::ClientResponse) -> Problem + Sync)) -> Self {
     ServiceRequester {
       token_creator: self.token_creator.clone(),
       error_handler,
