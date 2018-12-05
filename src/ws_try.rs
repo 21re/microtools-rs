@@ -70,16 +70,30 @@ where
   T: FromClientResponse<Result = T, FutureResult = F>,
   F: Future<Item = T, Error = Problem>,
 {
-  try(request).and_then(|resp| {
+  expect_success_with_error(request, default_error_handler)
+}
+
+pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> impl Future<Item = T, Error = Problem>
+where
+  R: IntoClientRequest,
+  T: FromClientResponse<Result = T, FutureResult = F>,
+  F: Future<Item = T, Error = Problem>,
+  E: Fn(client::ClientResponse) -> Problem,
+{
+  try(request).and_then(move |resp| {
     if resp.status().is_success() {
       WSTry::MayBeSuccess(T::from_response(resp))
     } else {
-      WSTry::Failure(Problem::for_status(
-        resp.status().as_u16(),
-        format!("Service request failed: {}", resp.status()),
-      ))
+      WSTry::Failure(error_handler(resp))
     }
   })
+}
+
+pub fn default_error_handler(response: client::ClientResponse) -> Problem {
+  Problem::for_status(
+    response.status().as_u16(),
+    format!("Service request failed: {}", response.status()),
+  )
 }
 
 impl IntoClientRequest for client::ClientRequest {

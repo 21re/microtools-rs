@@ -15,6 +15,7 @@ pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
 #[derive(Clone)]
 pub struct ServiceRequester {
   token_creator: Addr<gatekeeper::TokenCreator>,
+  error_handler: &'static Fn(client::ClientResponse) -> Problem,
 }
 
 pub trait IntoClientRequest {
@@ -25,6 +26,14 @@ impl ServiceRequester {
   pub fn with_service_auth(service_name: &str, scopes: &[(&str, &[&str])]) -> ServiceRequester {
     ServiceRequester {
       token_creator: gatekeeper::TokenCreator::for_service(service_name, scopes).start(),
+      error_handler: &ws_try::default_error_handler,
+    }
+  }
+
+  pub fn with_error_handler(&self, error_handler: &'static Fn(client::ClientResponse) -> Problem) -> Self {
+    ServiceRequester {
+      token_creator: self.token_creator.clone(),
+      error_handler,
     }
   }
 
@@ -86,7 +95,8 @@ impl ServiceRequester {
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
     F: Future<Item = O, Error = Problem>,
   {
-    gatekeeper::get_token(&self.token_creator).and_then(|token| {
+    let error_handler_ref = self.error_handler;
+    gatekeeper::get_token(&self.token_creator).and_then(move |token| {
       let request = body.apply_body(
         client::ClientRequest::build()
           .method(method)
@@ -94,7 +104,7 @@ impl ServiceRequester {
           .header("Authorization", format!("Bearer {}", token.raw)),
       );
 
-      ws_try::expect_success::<_, F, O>(request)
+      ws_try::expect_success_with_error::<_, F, O, _>(request, error_handler_ref)
     })
   }
 
@@ -104,14 +114,15 @@ impl ServiceRequester {
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
     F: Future<Item = O, Error = Problem>,
   {
-    gatekeeper::get_token(&self.token_creator).and_then(|token| {
+    let error_handler_ref = self.error_handler;
+    gatekeeper::get_token(&self.token_creator).and_then(move |token| {
       let request = client::ClientRequest::build()
         .method(method)
         .uri(url)
         .header("Authorization", format!("Bearer {}", token.raw))
         .finish();
 
-      ws_try::expect_success::<_, F, O>(request)
+      ws_try::expect_success_with_error::<_, F, O, _>(request, error_handler_ref)
     })
   }
 }
