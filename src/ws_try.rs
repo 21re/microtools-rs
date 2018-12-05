@@ -89,6 +89,7 @@ where
   })
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
 pub fn default_error_handler(response: client::ClientResponse) -> Problem {
   Problem::for_status(
     response.status().as_u16(),
