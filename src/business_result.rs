@@ -1,5 +1,5 @@
+use crate::problem::Problem;
 use futures::{future, Future, IntoFuture};
-use problem::Problem;
 use std::fmt::Display;
 use std::result::Result;
 

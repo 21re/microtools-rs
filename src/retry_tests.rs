@@ -18,7 +18,8 @@ fn test_retry_ok() {
         let mut t = count_tries.lock().unwrap();
         *t += 1;
         business_result::success(42)
-      }).then(move |result| {
+      })
+      .then(move |result| {
         assert_that(&result).is_equal_to(Ok(42));
         System::current().stop();
         Ok(())
@@ -47,7 +48,8 @@ fn test_retry_all_fail() {
         let mut times = times_collect.lock().unwrap();
         times.push(SystemTime::now());
         business_result::failure::<u32, _>(Problem::not_found().with_details("Always fail"))
-      }).then(move |result| {
+      })
+      .then(move |result| {
         assert_that(&result).is_equal_to(Err(Problem::not_found().with_details("Always fail")));
         System::current().stop();
         Ok(())
@@ -89,7 +91,8 @@ fn test_retry_nfail() {
         } else {
           business_result::failure::<u32, _>(Problem::not_found().with_details("Fail"))
         }
-      }).then(move |result| {
+      })
+      .then(move |result| {
         assert_that(&result).is_equal_to(Ok(42));
         System::current().stop();
         Ok(())

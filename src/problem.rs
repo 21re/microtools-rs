@@ -1,5 +1,6 @@
 use actix;
 use actix_web;
+use log::error;
 use serde_json;
 use std;
 
@@ -134,7 +135,8 @@ impl actix_web::error::ResponseError for Problem {
   fn error_response(&self) -> actix_web::HttpResponse {
     actix_web::HttpResponse::build(
       actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
-    ).json(self)
+    )
+    .json(self)
   }
 }
 
@@ -146,7 +148,8 @@ impl actix_web::Responder for Problem {
     Ok(
       actix_web::HttpResponse::build(
         actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
-      ).json(self),
+      )
+      .json(self),
     )
   }
 }

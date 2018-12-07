@@ -1,4 +1,4 @@
-use service_requester::encode_url_component;
+use crate::service_requester::encode_url_component;
 use spectral::prelude::*;
 
 #[test]

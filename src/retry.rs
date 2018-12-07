@@ -1,9 +1,9 @@
 use super::{AsyncBusinessResult, BusinessResult};
-use actix::fut;
-use actix::prelude::*;
+use crate::problem::Problem;
+use actix::{fut, Actor, ActorFuture, AsyncContext, Context, Handler, Message, WrapFuture};
 use futures::sync::oneshot;
 use futures::Future;
-use problem::Problem;
+use log::error;
 use std::time::Duration;
 
 pub struct RetryActor<F, C, U> {
@@ -107,7 +107,8 @@ impl Retrier {
       context,
       factory,
       sender: Some(sender),
-    }.start();
+    }
+    .start();
 
     Box::new(
       retrier

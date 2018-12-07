@@ -1,4 +1,5 @@
 use super::{business_result, AsyncBusinessResult, BusinessResult, Problem};
+use crate::subject::Subject;
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use actix_web::http::header::{HeaderMap, HeaderValue};
 use actix_web::middleware::{Middleware, Started};
@@ -6,7 +7,6 @@ use actix_web::FromRequest;
 use actix_web::{HttpRequest, HttpResponse, Result};
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use subject::Subject;
 
 #[derive(Clone, Debug)]
 pub struct AuthContext {

@@ -1,11 +1,12 @@
+use crate::business_result::AsyncBusinessResult;
+use crate::problem::Problem;
+use crate::types::{Done, Lines};
 use actix_web::client;
 use actix_web::HttpMessage;
-use business_result::AsyncBusinessResult;
 use futures::{future, Async, Future, Poll, Stream};
-use problem::Problem;
+use log::error;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
-use types::{Done, Lines};
 
 const JSON_RESPONSE_LIMIT: usize = 20 * 1024 * 1024;
 
@@ -46,7 +47,7 @@ where
   }
 }
 
-pub fn try<R>(request: R) -> impl Future<Item = client::ClientResponse, Error = Problem>
+pub fn r#try<R>(request: R) -> impl Future<Item = client::ClientResponse, Error = Problem>
 where
   R: IntoClientRequest,
 {
@@ -76,7 +77,7 @@ where
   T: FromClientResponse<Result = T, FutureResult = F>,
   F: Future<Item = T, Error = Problem>,
 {
-  try(request).and_then(move |resp| {
+  r#try(request).and_then(move |resp| {
     if resp.status().is_success() {
       WSTry::MayBeSuccess(T::from_response(resp))
     } else {
@@ -95,7 +96,7 @@ where
   F: Future<Item = T, Error = Problem>,
   E: Fn(client::ClientResponse) -> Box<Future<Item = Problem, Error = Problem>>,
 {
-  try(request).and_then(move |resp| {
+  r#try(request).and_then(move |resp| {
     if resp.status().is_success() {
       WSTry::MayBeSuccess(T::from_response(resp))
     } else {

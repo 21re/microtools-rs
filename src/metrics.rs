@@ -129,7 +129,7 @@ impl TimedActions {
     TimedActions { histogram }
   }
 
-  pub fn async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
+  pub fn r#async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
   where
     F: Future<Item = U, Error = E>,
   {

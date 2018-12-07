@@ -1,15 +1,5 @@
 #[macro_use]
-extern crate actix;
-extern crate actix_web;
-extern crate bytes;
-extern crate futures;
-#[macro_use]
-extern crate log;
-extern crate serde;
-#[macro_use]
 extern crate serde_derive;
-#[macro_use]
-extern crate serde_json;
 #[cfg(feature = "with-slog")]
 extern crate chrono;
 #[cfg(feature = "with-diesel")]
@@ -59,7 +49,7 @@ pub mod subject;
 pub mod types;
 pub mod ws_try;
 
-pub use business_result::{AsyncBusinessResult, BusinessResult, BusinessResultExt};
-pub use parse_request::*;
-pub use problem::*;
-pub use service_requester::*;
+pub use crate::business_result::{AsyncBusinessResult, BusinessResult, BusinessResultExt};
+pub use crate::parse_request::*;
+pub use crate::problem::*;
+pub use crate::service_requester::*;

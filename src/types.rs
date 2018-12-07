@@ -1,5 +1,5 @@
+use crate::problem::Problem;
 use actix_web::{HttpRequest, HttpResponse, Responder};
-use problem::Problem;
 
 #[derive(Clone, Debug)]
 pub struct Done;

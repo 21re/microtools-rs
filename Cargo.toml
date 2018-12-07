@@ -2,6 +2,7 @@
 name = "microtools"
 version = "0.1.0"
 authors = ["Bodo Junglas <junglas@objectcode.de>"]
+edition = "2018"
 
 [dependencies]
 actix = "0.7"

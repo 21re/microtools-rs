@@ -1,12 +1,12 @@
-#![allow(proc_macro_derive_resolution_fallback)]
-use actix::prelude::*;
+use crate::business_result::BusinessResult;
+use crate::problem::Problem;
+use crate::ws_try;
+use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFuture};
 use actix_web::client;
-use business_result::BusinessResult;
 use futures::Future;
-use problem::Problem;
+use log::error;
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use ws_try;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
@@ -75,7 +75,7 @@ impl Handler<GetToken> for TokenCreator {
           }
         };
 
-        ActorResponse::async(ws_try::expect_success(token_request).into_actor(self).map(
+        ActorResponse::r#async(ws_try::expect_success(token_request).into_actor(self).map(
           |token: Token, actor: &mut TokenCreator, _| {
             actor.current = Some(token.clone());
             token

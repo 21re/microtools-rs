@@ -1,9 +1,9 @@
 use super::AsyncBusinessResult;
+use crate::problem::Problem;
 use actix_web::dev::{JsonBody, MessageBody};
 use actix_web::{FromRequest, HttpMessage, HttpRequest};
 use bytes::Bytes;
 use futures::{Future, IntoFuture};
-use problem::Problem;
 use serde::de::DeserializeOwned;
 use std::fmt;
 use std::ops::Deref;
