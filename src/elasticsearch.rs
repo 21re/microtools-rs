@@ -9,6 +9,7 @@ use serde_json::json;
 use serde_json::to_vec;
 use std::collections::HashMap;
 use std::fmt;
+use serde_derive::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]

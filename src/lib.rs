@@ -1,31 +1,3 @@
-#[macro_use]
-extern crate serde_derive;
-#[cfg(feature = "with-slog")]
-extern crate chrono;
-#[cfg(feature = "with-diesel")]
-extern crate diesel;
-extern crate prometheus;
-#[cfg(feature = "with-diesel")]
-extern crate r2d2;
-#[cfg(feature = "with-slog")]
-extern crate slog;
-#[cfg(feature = "with-slog")]
-extern crate slog_async;
-#[cfg(feature = "with-slog")]
-extern crate slog_envlogger;
-#[cfg(feature = "with-slog")]
-extern crate slog_json;
-#[cfg(feature = "with-slog")]
-extern crate slog_scope;
-#[cfg(feature = "with-slog")]
-extern crate slog_stdlog;
-#[cfg(feature = "with-toml")]
-extern crate toml;
-extern crate url;
-
-#[cfg(test)]
-extern crate spectral;
-
 pub mod auth_middleware;
 pub mod business_result;
 pub mod elasticsearch;
