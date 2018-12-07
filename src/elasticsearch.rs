@@ -5,11 +5,11 @@ use bytes::Bytes;
 use futures::stream;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::to_vec;
 use std::collections::HashMap;
 use std::fmt;
-use serde_derive::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]

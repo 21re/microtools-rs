@@ -5,9 +5,9 @@ use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFu
 use actix_web::client;
 use futures::Future;
 use log::error;
+use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use serde_derive::{Serialize, Deserialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {

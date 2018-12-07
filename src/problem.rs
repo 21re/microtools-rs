@@ -1,9 +1,9 @@
 use actix;
 use actix_web;
 use log::error;
+use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std;
-use serde_derive::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Problem {
