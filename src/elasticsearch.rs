@@ -250,22 +250,39 @@ pub struct Bucket {
 #[derive(Clone, Debug, Deserialize)]
 pub struct BulkActionResponse {
   #[serde(rename = "_id")]
-  id: String,
-  status: u16,
-  result: Option<String>,
+  pub id: String,
+  pub status: u16,
+  pub result: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct BulkResponseItem {
-  index: Option<BulkActionResponse>,
-  update: Option<BulkActionResponse>,
-  delete: Option<BulkActionResponse>,
+  pub index: Option<BulkActionResponse>,
+  pub update: Option<BulkActionResponse>,
+  pub delete: Option<BulkActionResponse>,
+}
+
+impl BulkResponseItem {
+  pub fn action_response(&self) -> Option<&BulkActionResponse> {
+    self
+      .index
+      .as_ref()
+      .or_else(|| self.update.as_ref())
+      .or_else(|| self.delete.as_ref())
+  }
+
+  pub fn is_success(&self) -> bool {
+    self
+      .action_response()
+      .map(|response| response.status < 300)
+      .unwrap_or(false)
+  }
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct BulkResponse {
-  errors: bool,
-  items: Vec<BulkResponseItem>,
+  pub errors: bool,
+  pub items: Vec<BulkResponseItem>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -279,11 +296,9 @@ impl BulkResult {
     let mut result: BulkResult = Default::default();
 
     for item in response.items {
-      match item.index.or(item.update).or(item.delete) {
-        Some(ref action_response) if action_response.status < 300 => {
-          result.successes.push(action_response.id.to_owned())
-        }
-        Some(action_response) => result.failures.push(action_response.id),
+      match item.action_response() {
+        Some(action_response) if action_response.status < 300 => result.successes.push(action_response.id.to_owned()),
+        Some(action_response) => result.failures.push(action_response.id.to_owned()),
         None => (),
       }
     }
