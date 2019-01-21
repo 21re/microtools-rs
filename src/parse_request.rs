@@ -64,7 +64,7 @@ where
   #[inline]
   fn from_request(req: &HttpRequest<S>, cfg: &Self::Config) -> Self::Result {
     Ok(Box::new(
-      JsonBody::new(req)
+      JsonBody::new::<S>(req, None)
         .limit(cfg.limit)
         .map_err(|error| Problem::bad_request().with_details(format!("Invalid json: {}", error)))
         .map(ValidatedJson),
@@ -93,7 +93,7 @@ macro_rules! request_parameter {
     match $req.match_info().query($name) {
       Ok(value) => value,
       Err(error) => {
-        return business_result::failure(Problem::bad_request().with_details(format!("Missing {}: {}", $name, error)))
+        return business_result::failure(Problem::bad_request().with_details(format!("Missing {}: {}", $name, error)));
       }
     }
   };

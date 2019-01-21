@@ -129,7 +129,7 @@ impl TimedActions {
     TimedActions { histogram }
   }
 
-  pub fn r#async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
+  pub fn time_async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
   where
     F: Future<Item = U, Error = E>,
   {
@@ -146,7 +146,7 @@ impl TimedActions {
     })
   }
 
-  pub fn sync<F, U, E>(&self, action: &str, f: F) -> Result<U, E>
+  pub fn time_sync<F, U, E>(&self, action: &str, f: F) -> Result<U, E>
   where
     F: FnOnce() -> Result<U, E>,
   {
