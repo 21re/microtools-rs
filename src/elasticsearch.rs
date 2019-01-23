@@ -114,6 +114,11 @@ impl Query {
   pub fn prefix<F: Into<String>, V: Into<Value>>(field: F, value: V) -> Query {
     Query::Prefix(field.into(), value.into())
   }
+
+  pub fn bool_query(must: Vec<Query>, filter: Vec<Query>, must_not: Vec<Query>, should: Vec<Query>, minimum_should_match: Option<i32>) -> Query {
+    Query::Bool(BoolQuery{must, filter, must_not, should, minimum_should_match})
+  }
+
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
