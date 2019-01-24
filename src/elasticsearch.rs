@@ -7,9 +7,10 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
-use serde_json::to_vec;
+use serde_json::to_writer;
 use std::collections::HashMap;
 use std::fmt;
+use std::io::Write;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
@@ -344,26 +345,26 @@ where
   pub fn to_bytes(&self) -> Result<Bytes, Problem> {
     match self {
       BulkAction::Index(id, doc) => {
-        let mut result = Bytes::new();
-        result.extend_from_slice(&to_vec(&json!(  {"index": { "_id": id, "_type": "_doc" } }))?);
-        result.extend_from_slice(b"\n");
-        result.extend_from_slice(&to_vec(doc)?);
-        result.extend_from_slice(b"\n");
-        Ok(result)
+        let mut buf: Vec<u8> = Vec::with_capacity(8192);
+        to_writer(&mut buf, &json!(  {"index": { "_id": id, "_type": "_doc" } }))?;
+        buf.write_all(b"\n")?;
+        to_writer(&mut buf, &doc)?;
+        buf.write_all(b"\n")?;
+        Ok(buf.into())
       }
       BulkAction::Upsert(id, doc) => {
-        let mut result = Bytes::new();
-        result.extend_from_slice(&to_vec(&json!(  {"update": { "_id": id, "_type": "_doc" } }))?);
-        result.extend_from_slice(b"\n");
-        result.extend_from_slice(&to_vec(&json!({"doc": doc, "doc_as_upsert": true}))?);
-        result.extend_from_slice(b"\n");
-        Ok(result)
+        let mut buf: Vec<u8> = Vec::with_capacity(8192);
+        to_writer(&mut buf, &json!(  {"update": { "_id": id, "_type": "_doc" } }))?;
+        buf.write_all(b"\n{\"doc\":")?;
+        to_writer(&mut buf, &doc)?;
+        buf.write_all(b",\"doc_as_upsert\":true}\n")?;
+        Ok(buf.into())
       }
       BulkAction::Delete(id) => {
-        let mut result = Bytes::new();
-        result.extend_from_slice(&to_vec(&json!(  {"delete": { "_id": id, "_type": "_doc" } }))?);
-        result.extend_from_slice(b"\n");
-        Ok(result)
+        let mut buf: Vec<u8> = Vec::with_capacity(8192);
+        to_writer(&mut buf, &json!(  {"delete": { "_id": id, "_type": "_doc" } }))?;
+        buf.write_all(b"\n")?;
+        Ok(buf.into())
       }
     }
   }
