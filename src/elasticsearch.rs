@@ -1,3 +1,4 @@
+use super::encode_url_component;
 use super::serde_field_value;
 use super::{IntoClientRequest, Problem};
 use actix_web::client::{ClientRequest, ClientRequestBuilder};
@@ -384,5 +385,50 @@ where
       .content_type("application/x-ndjson")
       .streaming(stream::iter_result(self.0.into_iter().map(|a| a.to_bytes())))
       .map_err(Problem::from)
+  }
+}
+
+pub struct ElasticsearchUrlBuilder {
+  elasticsearch_base_url: String,
+  index_name: String,
+}
+
+impl ElasticsearchUrlBuilder {
+  pub fn new(elasticsearch_base_url: String, index_name: String) -> ElasticsearchUrlBuilder {
+    ElasticsearchUrlBuilder {
+      elasticsearch_base_url,
+      index_name,
+    }
+  }
+
+  pub fn index(&self) -> String {
+    format!("{}/{}", self.elasticsearch_base_url, self.index_name)
+  }
+
+  pub fn mapping(&self) -> String {
+    format!("{}/_mapping/_doc", self.index())
+  }
+
+  pub fn search(&self) -> String {
+    format!("{}/_search", self.index())
+  }
+
+  pub fn mget(&self) -> String {
+    format!("{}/_doc/_mget", self.index())
+  }
+
+  pub fn create(&self, id: String) -> String {
+    format!(
+      "{}/_doc/{}/_create?refresh=true",
+      self.index(),
+      encode_url_component(id),
+    )
+  }
+
+  pub fn update(&self, id: String) -> String {
+    format!("{}/_doc/{}/_update", self.index(), encode_url_component(id),)
+  }
+  pub fn delete(&self, id: String) -> String {
+    format!("{}/_doc/{}", self.index(), encode_url_component(id),)
   }
 }
