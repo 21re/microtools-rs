@@ -429,7 +429,7 @@ impl ElasticsearchUrlBuilder {
     format!("{}/_doc/{}/_update", self.index(), encode_url_component(id),)
   }
   pub fn delete(&self, id: String) -> String {
-    format!("{}/_doc/{}", self.index(), encode_url_component(id),)
+    format!("{}/_doc/{}?refresh=wait_for", self.index(), encode_url_component(id),)
   }
 
   pub fn delete_by_query(&self) -> String {
