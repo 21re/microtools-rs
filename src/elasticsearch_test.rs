@@ -95,3 +95,10 @@ fn test_build_url_update() {
   assert_that(&url_builder.update("die id".to_string()))
     .is_equal_to("http://server/INDEX_NAME/_doc/die+id/_update".to_string());
 }
+
+#[test]
+fn test_build_url_delete_by_query() {
+  let url_builder = ElasticsearchUrlBuilder::new("http://server".to_string(), "INDEX_NAME".to_string());
+
+  assert_that(&url_builder.delete_by_query()).is_equal_to("http://server/INDEX_NAME/_delete_by_query".to_string());
+}
