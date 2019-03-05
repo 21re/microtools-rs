@@ -248,3 +248,12 @@ impl From<::diesel::result::Error> for Problem {
     Problem::internal_server_error().with_details(format!("Diesel result: {}", error))
   }
 }
+
+#[cfg(feature = "with-reqwest")]
+impl From<::reqwest::Error> for Problem {
+  fn from(error: ::reqwest::Error) -> Self {
+    error!("Reqwest error: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Request result: {}", error))
+  }
+}
