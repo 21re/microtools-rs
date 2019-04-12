@@ -1,5 +1,6 @@
 use crate::problem::Problem;
 use futures::{future, Future, IntoFuture};
+use std::convert::Into;
 use std::fmt::Display;
 use std::result::Result;
 
@@ -36,7 +37,7 @@ pub fn failure<T: 'static, E: Into<Problem>>(error: E) -> AsyncBusinessResult<T>
 pub fn from_future<F, E, T>(f: F) -> AsyncBusinessResult<T>
 where
   F: IntoFuture<Item = T, Error = E> + 'static,
-  E: Into<Problem>,
+  E: Into<Problem> + 'static,
 {
-  Box::new(f.into_future().map_err(|e| e.into()))
+  Box::new(f.into_future().map_err(E::into))
 }

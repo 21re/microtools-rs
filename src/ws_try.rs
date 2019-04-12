@@ -130,7 +130,7 @@ where
   E: Into<Problem>,
 {
   fn into_request(self) -> Result<client::ClientRequest, Problem> {
-    self.map_err(|err| err.into())
+    self.map_err(E::into)
   }
 }
 
