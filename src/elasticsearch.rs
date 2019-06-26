@@ -5,7 +5,7 @@ use actix_web::client::{ClientRequest, ClientRequestBuilder};
 use bytes::Bytes;
 use futures::stream;
 use serde::de::{MapAccess, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::to_writer;
@@ -162,7 +162,7 @@ impl Sort {
   }
 }
 
-impl Serialize for Sort {
+impl serde::Serialize for Sort {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
     S: Serializer,
@@ -174,7 +174,7 @@ impl Serialize for Sort {
   }
 }
 
-impl<'de> Deserialize<'de> for Sort {
+impl<'de> serde::Deserialize<'de> for Sort {
   fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: Deserializer<'de>,
@@ -333,7 +333,7 @@ pub enum BulkAction<T> {
 
 impl<T> BulkAction<T>
 where
-  T: Serialize,
+  T: serde::Serialize,
 {
   pub fn index(id: String, doc: T) -> BulkAction<T> {
     BulkAction::Index(id, doc)
@@ -378,7 +378,7 @@ where
 impl<B, T> IntoClientRequest for BulkActions<B, T>
 where
   B: IntoIterator<Item = BulkAction<T>> + 'static,
-  T: Serialize,
+  T: serde::Serialize,
 {
   fn apply_body(self, builder: &mut ClientRequestBuilder) -> Result<ClientRequest, Problem> {
     builder
