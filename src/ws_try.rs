@@ -8,7 +8,7 @@ use log::error;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
-const JSON_RESPONSE_LIMIT: usize = 20 * 1024 * 1024;
+const JSON_RESPONSE_LIMIT: usize = 100 * 1024 * 1024;
 
 pub trait IntoClientRequest {
   fn into_request(self) -> Result<client::ClientRequest, Problem>;
