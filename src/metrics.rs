@@ -44,9 +44,9 @@ enum StatusCategory {
 impl StatusCategory {
   fn from_status(status: StatusCode) -> StatusCategory {
     match status.as_u16() {
-      200...299 => StatusCategory::Ok,
-      300...399 => StatusCategory::Redirect,
-      400...499 => StatusCategory::ClientError,
+      200..=299 => StatusCategory::Ok,
+      300..=399 => StatusCategory::Redirect,
+      400..=499 => StatusCategory::ClientError,
       _ => StatusCategory::InternalError,
     }
   }

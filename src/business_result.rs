@@ -22,7 +22,7 @@ where
   }
 }
 
-pub type AsyncBusinessResult<T> = Box<Future<Item = T, Error = Problem>>;
+pub type AsyncBusinessResult<T> = Box<dyn Future<Item = T, Error = Problem>>;
 
 pub fn success<T: 'static>(result: T) -> AsyncBusinessResult<T> {
   Box::new(future::ok(result))

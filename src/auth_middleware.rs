@@ -50,10 +50,10 @@ impl<S> FromRequest<S> for AuthContext {
   }
 }
 
-static SUBJECT_HEADER_NAME: &'static str = "X-Auth-Sub";
-static TOKEN_HEADER_NAME: &'static str = "X-Auth-Token";
-static ORGANIZATION_HEADER_NAME: &'static str = "X-Auth-Org";
-static SCOPES_HEADER_PREFIX: &'static str = "x-auth-scopes-";
+static SUBJECT_HEADER_NAME: &str = "X-Auth-Sub";
+static TOKEN_HEADER_NAME: &str = "X-Auth-Token";
+static ORGANIZATION_HEADER_NAME: &str = "X-Auth-Org";
+static SCOPES_HEADER_PREFIX: &str = "x-auth-scopes-";
 
 pub fn admin_scoped_action<F>(req: &HttpRequest, f: F) -> Result<HttpResponse>
 where

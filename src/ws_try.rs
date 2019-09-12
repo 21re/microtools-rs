@@ -24,7 +24,7 @@ pub trait FromClientResponse {
 pub enum WSTry<F> {
   MayBeSuccess(F),
   Failure(Problem),
-  FutureFailure(Box<Future<Item = Problem, Error = Problem>>),
+  FutureFailure(Box<dyn Future<Item = Problem, Error = Problem>>),
 }
 
 impl<T, F> Future for WSTry<F>
@@ -94,7 +94,7 @@ where
   R: IntoClientRequest,
   T: FromClientResponse<Result = T, FutureResult = F>,
   F: Future<Item = T, Error = Problem>,
-  E: Fn(client::ClientResponse) -> Box<Future<Item = Problem, Error = Problem>>,
+  E: Fn(client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>>,
 {
   r#try(request).and_then(move |resp| {
     if resp.status().is_success() {
@@ -106,7 +106,7 @@ where
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn default_error_handler(response: client::ClientResponse) -> Box<Future<Item = Problem, Error = Problem>> {
+pub fn default_error_handler(response: client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>> {
   Box::new(future::ok(Problem::for_status(
     response.status().as_u16(),
     format!("Service request failed: {}", response.status()),

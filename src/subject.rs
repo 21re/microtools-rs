@@ -10,10 +10,10 @@ pub enum Subject {
   Generic(String),
 }
 
-static ADMIN_SUBJECT: &'static str = "admin/";
-static CUSTOMER_SUBJECT: &'static str = "customer/";
-static SERVICE_SUBJECT: &'static str = "service/";
-static API_SUBJECT: &'static str = "api/";
+static ADMIN_SUBJECT: &str = "admin/";
+static CUSTOMER_SUBJECT: &str = "customer/";
+static SERVICE_SUBJECT: &str = "service/";
+static API_SUBJECT: &str = "api/";
 
 impl FromStr for Subject {
   type Err = ::actix_web::error::Error;
