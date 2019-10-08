@@ -11,6 +11,7 @@ use serde_json::json;
 use serde_json::to_writer;
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::io::Write;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -21,12 +22,12 @@ pub enum Value {
   String(String),
 }
 
-impl Value {
-  pub fn to_string(&self) -> String {
+impl Display for Value {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
     match self {
-      Value::Bool(b) => format!("{}", b),
-      Value::Int(i) => format!("{}", i),
-      Value::String(str) => str.clone(),
+      Value::Bool(b) => write!(f, "{}", b),
+      Value::Int(i) => write!(f, "{}", i),
+      Value::String(str) => write!(f, "{}", str),
     }
   }
 }

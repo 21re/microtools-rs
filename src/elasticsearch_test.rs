@@ -1,4 +1,4 @@
-use super::elasticsearch::{ElasticsearchUrlBuilder, Query, QueryRequest, SortOrder};
+use super::elasticsearch::{ElasticsearchUrlBuilder, Query, QueryRequest, SortOrder, Value};
 use serde_json;
 use spectral::prelude::*;
 
@@ -101,4 +101,11 @@ fn test_build_url_delete_by_query() {
   let url_builder = ElasticsearchUrlBuilder::new("http://server".to_string(), "INDEX_NAME".to_string());
 
   assert_that(&url_builder.delete_by_query()).is_equal_to("http://server/INDEX_NAME/_delete_by_query".to_string());
+}
+
+#[test]
+fn test_value_display() {
+  assert_eq!(format!("{}", Value::Bool(true)), "true");
+  assert_eq!(format!("{}", Value::Int(1)), "1");
+  assert_eq!(format!("{}", Value::String("lol".to_owned())), "lol");
 }
