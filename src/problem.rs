@@ -257,3 +257,12 @@ impl From<::reqwest::Error> for Problem {
     Problem::internal_server_error().with_details(format!("Request result: {}", error))
   }
 }
+
+#[cfg(feature = "with-config")]
+impl From<::config::ConfigError> for Problem {
+  fn from(error: ::config::ConfigError) -> Self {
+    error!("Config error: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Config: {}", error))
+  }
+}
