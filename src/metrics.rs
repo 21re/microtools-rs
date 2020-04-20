@@ -2,7 +2,7 @@ use super::Problem;
 use actix_web::error::Error;
 use actix_web::http::{Method, StatusCode};
 use actix_web::{HttpRequest, HttpResponse, Resource};
-use futures::Future;
+use futures::{Future, FutureExt};
 use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEncoder};
 use std::time::Instant;
 
@@ -133,6 +133,7 @@ impl TimedActions {
   {
     let histogram = self.histogram.clone();
     let start = Instant::now();
+
 
     f.then(move |result| {
       let outcome = if result.is_ok() { "ok" } else { "err" };
