@@ -90,7 +90,7 @@ where
   })
 }
 
-pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> impl Future<Item = T, Error = Problem>
+pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> impl Future<Output = T>
 where
   R: IntoClientRequest,
   T: FromClientResponse<Result = T, FutureResult = F>,

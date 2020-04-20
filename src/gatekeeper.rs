@@ -33,11 +33,10 @@ pub struct TokenCreator {
   current: Option<Token>,
 }
 
-pub fn get_token(actor: &actix::Addr<TokenCreator>) ->  Future<Output = Token> {
-  let a = actor.send(GetToken);
-  let b = a.flatten();
-
-  b
+pub async fn get_token(actor: &actix::Addr<TokenCreator>) ->  BusinessResult<Token> {
+  match actor.send(GetToken).await {
+    Ok(res) => res
+  }
 }
 
 impl TokenCreator {

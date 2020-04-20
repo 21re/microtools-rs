@@ -5,6 +5,7 @@ use actix_web::{HttpRequest, HttpResponse, Resource};
 use futures::{Future, FutureExt};
 use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEncoder};
 use std::time::Instant;
+use crate::BusinessResult;
 
 pub fn metrics_resource<S: 'static>(r: &mut Resource<S>) {
   let encoder = TextEncoder::new();
@@ -127,9 +128,9 @@ impl TimedActions {
     TimedActions { histogram }
   }
 
-  pub fn time_async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Output = U>
+  pub fn time_async<F, U, T>(&self, action: &'static str, f: F) ->  Future<Output = BusinessResult<T>>
   where
-    F: Future<Output = U>,
+    F: Future<Output = BusinessResult<T>>,
   {
     let histogram = self.histogram.clone();
     let start = Instant::now();

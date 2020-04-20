@@ -150,7 +150,7 @@ impl actix_web::Responder for Problem {
   type Future = Ready<Result<actix_web::HttpResponse, Self::Error>>;
 
 
-  fn respond_to<S: 'static>(self, _req: &HttpRequest) -> Self::Future {
+  fn respond_to(self, _req: &HttpRequest) -> Self::Future {
     ready(Ok(actix_web::HttpResponse::build(
       actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
     )

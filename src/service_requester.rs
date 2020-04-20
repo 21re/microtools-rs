@@ -4,9 +4,11 @@ use crate::problem::Problem;
 use crate::ws_try;
 use actix::{Actor, Addr};
 use actix_web::{client, http};
-use futures::Future;
+use futures::{Future, FutureExt};
 use serde::Serialize;
 use url::form_urlencoded::byte_serialize;
+use actix_web::client::{Client, ClientRequest};
+use std::convert::TryFrom;
 
 pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
   byte_serialize(value.as_ref()).collect::<String>()
@@ -41,7 +43,7 @@ impl ServiceRequester {
   }
 
   #[inline]
-  pub fn get<U, F, O>(&self, url: U) -> impl Future<Item = O, Error = Problem>
+  pub fn get<U, F, O>(&self, url: U) -> impl Future<Output = O>
   where
     U: AsRef<str>,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
@@ -113,19 +115,17 @@ impl ServiceRequester {
     })
   }
 
-  pub fn without_body<U, F, O>(&self, method: http::Method, url: U) -> impl Future<Item = O, Error = Problem>
+  pub async fn without_body<F, O>(&self, method: http::Method, url: String) -> O
   where
-    U: AsRef<str>,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
     F: Future<Output = O>,
   {
     let error_handler_ref = self.error_handler;
-    gatekeeper::get_token(&self.token_creator).and_then(move |token| {
-      let request = client::ClientRequest::build()
-        .method(method)
-        .uri(url)
-        .header("Authorization", format!("Bearer {}", token.raw))
-        .finish();
+    let token = gatekeeper::get_token(&self.token_creator).await;
+
+        token.and_then(move |token| {
+      let request = Client::new().request(method, url)
+        .header("Authorization", format!("Bearer {}", token.raw));
 
       ws_try::expect_success_with_error::<_, F, O, _>(request, error_handler_ref)
     })
