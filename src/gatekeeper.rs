@@ -3,13 +3,14 @@ use crate::problem::Problem;
 use crate::ws_try;
 use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFuture};
 use actix_web::client;
-use futures::Future;
+use futures::{Future, FutureExt};
 use log::error;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use actix_web::client::Client;
 use actix::fut::ready;
+use actix::prelude::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
@@ -33,7 +34,10 @@ pub struct TokenCreator {
 }
 
 pub fn get_token(actor: &actix::Addr<TokenCreator>) -> impl Future<Output = Token> {
-  ready(actor.send(GetToken))
+  let a = actor.send(GetToken)
+
+
+  a
 }
 
 impl TokenCreator {
