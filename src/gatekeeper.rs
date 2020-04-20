@@ -1,7 +1,7 @@
 use crate::business_result::BusinessResult;
 use crate::problem::Problem;
 use crate::ws_try;
-use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFuture};
+use actix::{Actor, ActorResponse, Context, Handler, Message, WrapFuture};
 use actix_web::client;
 use futures::{Future, FutureExt};
 use log::error;
@@ -33,11 +33,11 @@ pub struct TokenCreator {
   current: Option<Token>,
 }
 
-pub fn get_token(actor: &actix::Addr<TokenCreator>) -> impl Future<Output = Token> {
-  let a = actor.send(GetToken)
+pub fn get_token(actor: &actix::Addr<TokenCreator>) ->  Future<Output = Token> {
+  let a = actor.send(GetToken);
+  let b = a.flatten();
 
-
-  a
+  b
 }
 
 impl TokenCreator {
