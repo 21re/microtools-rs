@@ -1,5 +1,5 @@
 use crate::problem::Problem;
-use futures::{future, Future, IntoFuture};
+use futures::{future, Future};
 use std::convert::Into;
 use std::fmt::Display;
 use std::result::Result;
@@ -22,7 +22,7 @@ where
   }
 }
 
-pub type AsyncBusinessResult<T> = Box<dyn Future<Item = T, Error = Problem>>;
+pub type AsyncBusinessResult<T> = Box<dyn Future<Output = T>>;
 
 pub fn success<T: 'static>(result: T) -> AsyncBusinessResult<T> {
   Box::new(future::ok(result))
@@ -34,10 +34,10 @@ pub fn failure<T: 'static, E: Into<Problem>>(error: E) -> AsyncBusinessResult<T>
   Box::new(future::err(problem))
 }
 
-pub fn from_future<F, E, T>(f: F) -> AsyncBusinessResult<T>
-where
-  F: IntoFuture<Item = T, Error = E> + 'static,
-  E: Into<Problem> + 'static,
-{
-  Box::new(f.into_future().map_err(E::into))
-}
+// pub fn from_future<F, E, T>(f: F) -> AsyncBusinessResult<T>
+// where
+//   F: IntoFuture<Item = T, Error = E> + 'static,
+//   E: Into<Problem> + 'static,
+// {
+//   Box::new(f.into_future().map_err(E::into))
+// }

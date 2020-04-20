@@ -8,6 +8,8 @@ use log::error;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use actix_web::client::Client;
+use actix::fut::ready;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
@@ -30,8 +32,8 @@ pub struct TokenCreator {
   current: Option<Token>,
 }
 
-pub fn get_token(actor: &actix::Addr<TokenCreator>) -> impl Future<Item = Token, Error = Problem> {
-  actor.send(GetToken).flatten()
+pub fn get_token(actor: &actix::Addr<TokenCreator>) -> impl Future<Output = Token> {
+  ready(actor.send(GetToken))
 }
 
 impl TokenCreator {
@@ -65,7 +67,7 @@ impl Handler<GetToken> for TokenCreator {
     match self.current {
       Some(ref token) if token.expires > unixtime => ActorResponse::reply(Ok(token.clone())),
       _ => {
-        let token_request = match client::post("http://localhost:12345/v1/tokens")
+        let token_request = match Client::default().post("http://localhost:12345/v1/tokens")
           .timeout(Duration::from_secs(30))
           .json(&self.claims)
         {

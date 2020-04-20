@@ -15,11 +15,11 @@ pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
 #[derive(Clone)]
 pub struct ServiceRequester {
   token_creator: Addr<gatekeeper::TokenCreator>,
-  error_handler: &'static (dyn Fn(client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>> + Sync),
+  error_handler: &'static (dyn Fn(client::ClientResponse) -> Box<dyn Future<Output = Problem>> + Sync),
 }
 
 pub trait IntoClientRequest {
-  fn apply_body(self, builder: &mut client::ClientRequestBuilder) -> Result<client::ClientRequest, Problem>;
+  fn apply_body(self, builder: &mut client::ClientBuilder) -> Result<client::ClientRequest, Problem>;
 }
 
 impl ServiceRequester {
@@ -32,7 +32,7 @@ impl ServiceRequester {
 
   pub fn with_error_handler(
     &self,
-    error_handler: &'static (dyn Fn(client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>> + Sync),
+    error_handler: &'static (dyn Fn(client::ClientResponse) -> Box<dyn Future<Output = Problem>> + Sync),
   ) -> Self {
     ServiceRequester {
       token_creator: self.token_creator.clone(),
@@ -45,7 +45,7 @@ impl ServiceRequester {
   where
     U: AsRef<str>,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     self.without_body(http::Method::GET, url)
   }
@@ -56,7 +56,7 @@ impl ServiceRequester {
     U: AsRef<str>,
     I: IntoClientRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     self.with_body(http::Method::POST, url, body)
   }
@@ -67,7 +67,7 @@ impl ServiceRequester {
     U: AsRef<str>,
     I: IntoClientRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     self.with_body(http::Method::PUT, url, body)
   }
@@ -78,7 +78,7 @@ impl ServiceRequester {
     U: AsRef<str>,
     I: IntoClientRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     self.with_body(http::Method::PATCH, url, body)
   }
@@ -88,7 +88,7 @@ impl ServiceRequester {
   where
     U: AsRef<str>,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     self.without_body(http::Method::DELETE, url)
   }
@@ -98,7 +98,7 @@ impl ServiceRequester {
     U: AsRef<str>,
     I: IntoClientRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     let error_handler_ref = self.error_handler;
     gatekeeper::get_token(&self.token_creator).and_then(move |token| {
@@ -117,7 +117,7 @@ impl ServiceRequester {
   where
     U: AsRef<str>,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Item = O, Error = Problem>,
+    F: Future<Output = O>,
   {
     let error_handler_ref = self.error_handler;
     gatekeeper::get_token(&self.token_creator).and_then(move |token| {
@@ -136,13 +136,13 @@ impl<S> IntoClientRequest for S
 where
   S: Serialize,
 {
-  fn apply_body(self, builder: &mut client::ClientRequestBuilder) -> Result<client::ClientRequest, Problem> {
+  fn apply_body(self, builder: &mut client::ClientBuilder) -> Result<client::ClientRequest, Problem> {
     builder.json(self).map_err(Problem::from)
   }
 }
 
 impl IntoClientRequest for types::Done {
-  fn apply_body(self, builder: &mut client::ClientRequestBuilder) -> Result<client::ClientRequest, Problem> {
+  fn apply_body(self, builder: &mut client::ClientBuilder) -> Result<client::ClientRequest, Problem> {
     builder.finish().map_err(Problem::from)
   }
 }

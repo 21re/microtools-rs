@@ -2,11 +2,14 @@ use crate::business_result::AsyncBusinessResult;
 use crate::problem::Problem;
 use crate::types::{Done, Lines};
 use actix_web::client;
+use actix_web::client::ClientResponse;
 use actix_web::HttpMessage;
-use futures::{future, Async, Future, Poll, Stream};
+use futures::{future, Future, Stream};
 use log::error;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+use futures::task::{Poll, Context};
+use std::pin::Pin;
 
 const JSON_RESPONSE_LIMIT: usize = 100 * 1024 * 1024;
 
@@ -16,35 +19,33 @@ pub trait IntoClientRequest {
 
 pub trait FromClientResponse {
   type Result;
-  type FutureResult: Future<Item = Self::Result, Error = Problem>;
+  type FutureResult: Future<Output = Self::Result>;
 
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult;
+  fn from_response(response: &client::ClientResponse) -> Self::FutureResult;
 }
 
 pub enum WSTry<F> {
   MayBeSuccess(F),
   Failure(Problem),
-  FutureFailure(Box<dyn Future<Item = Problem, Error = Problem>>),
+  FutureFailure(Box<dyn Future<Output = Problem>>),
 }
 
 impl<T, F> Future for WSTry<F>
 where
-  F: Future<Item = T, Error = Problem>,
+  F: Future<Output = T>,
 {
-  type Item = T;
-  type Error = Problem;
 
-  fn poll(&mut self) -> Poll<T, Problem> {
-    match self {
-      WSTry::MayBeSuccess(f) => f.poll(),
-      WSTry::Failure(problem) => Err(problem.clone()),
+  fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    match self.state {
+      WSTry::MayBeSuccess(f) =>  f.poll(),
+      WSTry::Failure(problem) => Poll::Ready(Err(problem.clone())),
       WSTry::FutureFailure(future_problem) => match future_problem.poll() {
-        Ok(Async::NotReady) => Ok(Async::NotReady),
-        Ok(Async::Ready(problem)) => Err(problem),
-        Err(problem) => Err(problem),
+        Poll::Pending => Poll::Pending,
+        Poll::Ready(problem) => Poll::Ready(Err(problem.clone())),
       },
     }
   }
+
 }
 
 pub fn r#try<R>(request: R) -> impl Future<Item = client::ClientResponse, Error = Problem>
@@ -75,7 +76,7 @@ pub fn expect_success<R, F, T>(request: R) -> impl Future<Item = T, Error = Prob
 where
   R: IntoClientRequest,
   T: FromClientResponse<Result = T, FutureResult = F>,
-  F: Future<Item = T, Error = Problem>,
+  F: Future<Output = T>,
 {
   r#try(request).and_then(move |resp| {
     if resp.status().is_success() {
@@ -93,8 +94,8 @@ pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> im
 where
   R: IntoClientRequest,
   T: FromClientResponse<Result = T, FutureResult = F>,
-  F: Future<Item = T, Error = Problem>,
-  E: Fn(client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>>,
+  F: Future<Output = T>,
+  E: Fn(client::ClientResponse) -> Box<dyn Future<Output = Problem>>,
 {
   r#try(request).and_then(move |resp| {
     if resp.status().is_success() {
@@ -106,7 +107,7 @@ where
 }
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn default_error_handler(response: client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>> {
+pub fn default_error_handler(response: client::ClientResponse) -> Box<dyn Future<Output = Problem>> {
   Box::new(future::ok(Problem::for_status(
     response.status().as_u16(),
     format!("Service request failed: {}", response.status()),
@@ -119,7 +120,7 @@ impl IntoClientRequest for client::ClientRequest {
   }
 }
 
-impl IntoClientRequest for client::ClientRequestBuilder {
+impl IntoClientRequest for client::ClientBuilder {
   fn into_request(mut self) -> Result<client::ClientRequest, Problem> {
     self.finish().map_err(Problem::from)
   }
@@ -133,36 +134,36 @@ where
     self.map_err(E::into)
   }
 }
+//
+// impl<T> FromClientResponse for T
+// where
+//   T: DeserializeOwned + 'static,
+// {
+//   type Result = T;
+//   type FutureResult = AsyncBusinessResult<T>;
+//
+//   fn from_response(mut response: actix_web::client::ClientResponse) -> Self::FutureResult {
+//     Box::new(response.json().limit(JSON_RESPONSE_LIMIT).map_err(Problem::from))
+//   }
+// }
 
-impl<T> FromClientResponse for T
-where
-  T: DeserializeOwned + 'static,
-{
-  type Result = T;
-  type FutureResult = AsyncBusinessResult<T>;
-
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult {
-    Box::new(response.json().limit(JSON_RESPONSE_LIMIT).map_err(Problem::from))
-  }
-}
-
-impl FromClientResponse for Done {
-  type Result = Done;
-  type FutureResult = AsyncBusinessResult<Done>;
-
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult {
-    Box::new(response.payload().from_err().for_each(|_| Ok(())).map(|_| Done))
-  }
-}
-
-impl FromClientResponse for Lines {
-  type Result = Lines;
-  type FutureResult = AsyncBusinessResult<Lines>;
-
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult {
-    Box::new(response.readlines().collect().then(|result| match result {
-      Ok(lines) => Ok(Lines::new(lines)),
-      Err(error) => Err(Problem::from(error)),
-    }))
-  }
-}
+// impl FromClientResponse for Done {
+//   type Result = Done;
+//   type FutureResult = AsyncBusinessResult<Done>;
+//
+//   fn from_response(response: client::ClientResponse) -> Self::FutureResult {
+//     Box::new(response.payload().from_err().for_each(|_| Ok(())).map(|_| Done))
+//   }
+// }
+//
+// impl FromClientResponse for Lines {
+//   type Result = Lines;
+//   type FutureResult = AsyncBusinessResult<Lines>;
+//
+//   fn from_response(response: client::ClientResponse) -> Self::FutureResult {
+//     Box::new(response.readlines().collect().then(|result| match result {
+//       Ok(lines) => Ok(Lines::new(lines)),
+//       Err(error) => Err(Problem::from(error)),
+//     }))
+//   }
+// }

@@ -5,12 +5,12 @@ authors = ["Bodo Junglas <junglas@objectcode.de>"]
 edition = "2018"
 
 [dependencies]
-actix = "0.7"
-actix-web = "0.7"
+actix = "0.9.0"
+actix-web = { version = "2.0.0", features = ["openssl"] }
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"
 serde_json = "1.0"
-futures = "0.1"
+futures = "0.3"
 toml = { version = "0.4", optional = true }
 log = "0.4"
 bytes = "0.4.10"

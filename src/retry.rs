@@ -1,7 +1,6 @@
 use super::{AsyncBusinessResult, BusinessResult};
 use crate::problem::Problem;
 use actix::{fut, Actor, ActorFuture, AsyncContext, Context, Handler, Message, WrapFuture};
-use futures::sync::oneshot;
 use futures::Future;
 use log::error;
 use std::time::Duration;
@@ -10,7 +9,7 @@ pub struct RetryActor<F, C, U> {
   delay: Duration,
   context: C,
   factory: F,
-  sender: Option<oneshot::Sender<BusinessResult<U>>>,
+  sender: Option<futures::channel::oneshot::Sender<BusinessResult<U>>>,
 }
 
 pub struct Try(u16);
@@ -19,10 +18,10 @@ impl Message for Try {
   type Result = ();
 }
 
-impl<F, C, FU, U> Handler<Try> for RetryActor<F, C, U>
+impl<F: std::marker::Unpin, C: std::marker::Unpin, FU, U> Handler<Try> for RetryActor<F, C, U>
 where
   F: Fn(&C) -> FU + 'static,
-  FU: Future<Item = U, Error = Problem> + 'static,
+  FU: Future<Output = U> + 'static,
   U: 'static + Send,
   C: 'static,
 {
@@ -64,10 +63,10 @@ where
   }
 }
 
-impl<F, C, FU, U> Actor for RetryActor<F, C, U>
+impl<F: std::marker::Unpin, C: std::marker::Unpin, FU, U> Actor for RetryActor<F, C, U>
 where
   F: Fn(&C) -> FU + 'static,
-  FU: Future<Item = U, Error = Problem> + 'static,
+  FU: Future<Output = U> + 'static,
   U: 'static + Send,
   C: 'static,
 {
@@ -96,11 +95,11 @@ impl Retrier {
   pub fn retry<F, C, FU, U>(&self, context: C, factory: F) -> AsyncBusinessResult<U>
   where
     F: Fn(&C) -> FU + 'static,
-    FU: Future<Item = U, Error = Problem> + 'static,
+    FU: Future<Output = U> + 'static,
     U: 'static + Send,
     C: 'static,
   {
-    let (sender, receiver) = oneshot::channel::<BusinessResult<U>>();
+    let (sender, receiver) = futures::channel::oneshot::channel::<BusinessResult<U>>();
     let retrier = RetryActor {
       delay: self.delay,
       context,

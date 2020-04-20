@@ -4,6 +4,10 @@ use log::error;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use std;
+use actix::prelude::Future;
+use actix::Response;
+use futures::future::{ready, Ready};
+use actix_web::HttpRequest;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Problem {
@@ -142,17 +146,17 @@ impl actix_web::error::ResponseError for Problem {
 }
 
 impl actix_web::Responder for Problem {
-  type Item = actix_web::HttpResponse;
-  type Error = Problem;
+  type Error = actix_web::Error;
+  type Future = Ready<Result<actix_web::HttpResponse, Self::Error>>;
 
-  fn respond_to<S: 'static>(self, _req: &actix_web::HttpRequest<S>) -> Result<actix_web::HttpResponse, Problem> {
-    Ok(
-      actix_web::HttpResponse::build(
-        actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
-      )
-      .json(self),
+
+  fn respond_to<S: 'static>(self, _req: &HttpRequest) -> Self::Future {
+    ready(Ok(actix_web::HttpResponse::build(
+      actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
     )
+        .json(self)))
   }
+
 }
 
 impl From<actix_web::client::SendRequestError> for Problem {
@@ -163,9 +167,9 @@ impl From<actix_web::client::SendRequestError> for Problem {
 
     match error {
       Timeout => Problem::internal_server_error().with_details("Request timeout"),
-      Connector(err) => Problem::internal_server_error().with_details(format!("HTTP connection error: {}", err)),
-      ParseError(err) => Problem::internal_server_error().with_details(format!("Invalid HTTP response: {}", err)),
-      Io(err) => Problem::from(err),
+      Connect(err) => Problem::internal_server_error().with_details(format!("HTTP connection error: {}", err)),
+      Response(err) => Problem::internal_server_error().with_details(format!("Invalid HTTP response: {}", err)),
+      e => Problem::from(e),
     }
   }
 }
@@ -183,7 +187,7 @@ impl From<actix_web::error::ReadlinesError> for Problem {
 
     match error {
       EncodingError => Problem::internal_server_error().with_details("Readline: Invalid encoding"),
-      PayloadError(error) => Problem::from(error),
+      Payload(error) => Problem::from(error),
       LimitOverflow => Problem::internal_server_error().with_details("Readline: Limit exeeded"),
       ContentTypeError(error) => Problem::from(error),
     }

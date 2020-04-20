@@ -2,11 +2,12 @@ use super::{business_result, AsyncBusinessResult, BusinessResult, Problem};
 use crate::subject::Subject;
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use actix_web::http::header::{HeaderMap, HeaderValue};
-use actix_web::middleware::{Middleware, Started};
 use actix_web::FromRequest;
 use actix_web::{HttpRequest, HttpResponse, Result};
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use crate::business_result::success;
+use crate::business_result::failure;
 
 #[derive(Clone, Debug)]
 pub struct AuthContext {
@@ -38,17 +39,18 @@ pub fn admin_scope(auth_context: &AuthContext) -> bool {
   }
 }
 
-impl<S> FromRequest<S> for AuthContext {
-  type Config = ();
-  type Result = BusinessResult<AuthContext>;
-
-  fn from_request(req: &HttpRequest<S>, _cfg: &Self::Config) -> Self::Result {
-    match req.extensions().get::<AuthContext>() {
-      Some(auth_context) => Ok(auth_context.to_owned()),
-      None => Err(Problem::unauthorized()),
-    }
-  }
-}
+// impl FromRequest for AuthContext {
+//   type Error  = Problem;
+//   type Future = AsyncBusinessResult<AuthContext>;
+//   type Config = ();
+//
+//   fn from_request(req: &HttpRequest, _cfg: &Self::Config) -> Self::Future {
+//     match req.extensions().get::<AuthContext>() {
+//       Some(auth_context) => success(auth_context.to_owned()),
+//       None => failure(Problem::unauthorized()),
+//     }
+//   }
+// }
 
 static SUBJECT_HEADER_NAME: &str = "X-Auth-Sub";
 static TOKEN_HEADER_NAME: &str = "X-Auth-Token";
@@ -126,28 +128,30 @@ fn extract_organization(maybe_organization: Option<&HeaderValue>) -> Option<Stri
   }
 }
 
-impl<S> Middleware<S> for AuthMiddleware {
-  fn start(&self, req: &HttpRequest<S>) -> Result<Started> {
-    let maybe_subject: Option<&HeaderValue> = req.headers().get(SUBJECT_HEADER_NAME);
-    let maybe_token: Option<&HeaderValue> = req.headers().get(TOKEN_HEADER_NAME);
-    let maybe_organization: Option<&HeaderValue> = req.headers().get(ORGANIZATION_HEADER_NAME);
 
-    if let (Some(subject), Some(token)) = (maybe_subject, maybe_token) {
-      let scopes: BTreeMap<String, Vec<String>> = extract_scopes_from_headers(req.headers());
 
-      if let (Ok(subject), Ok(token)) = (subject.to_str(), token.to_str()) {
-        req.extensions_mut().insert(AuthContext {
-          subject: Subject::from_str(subject)?,
-          token: token.to_string(),
-          organization: extract_organization(maybe_organization),
-          scopes,
-        });
-      }
-    }
-
-    Ok(Started::Done)
-  }
-}
+// impl<S> Middleware<S> for AuthMiddleware {
+//   fn start(&self, req: &HttpRequest) -> Result<Started> {
+//     let maybe_subject: Option<&HeaderValue> = req.headers().get(SUBJECT_HEADER_NAME);
+//     let maybe_token: Option<&HeaderValue> = req.headers().get(TOKEN_HEADER_NAME);
+//     let maybe_organization: Option<&HeaderValue> = req.headers().get(ORGANIZATION_HEADER_NAME);
+//
+//     if let (Some(subject), Some(token)) = (maybe_subject, maybe_token) {
+//       let scopes: BTreeMap<String, Vec<String>> = extract_scopes_from_headers(req.headers());
+//
+//       if let (Ok(subject), Ok(token)) = (subject.to_str(), token.to_str()) {
+//         req.extensions_mut().insert(AuthContext {
+//           subject: Subject::from_str(subject)?,
+//           token: token.to_string(),
+//           organization: extract_organization(maybe_organization),
+//           scopes,
+//         });
+//       }
+//     }
+//
+//     Ok(Started::Done)
+//   }
+// }
 
 impl Default for AuthMiddleware {
   fn default() -> AuthMiddleware {
@@ -159,6 +163,7 @@ impl Default for AuthMiddleware {
 mod tests {
   use super::*;
   use spectral::prelude::*;
+  use actix_web::http::HeaderName;
 
   #[test]
   fn extract_organization_from_header_is_successful() {
@@ -177,9 +182,9 @@ mod tests {
   #[test]
   fn extract_scopes_is_successful() {
     let mut headers = HeaderMap::new();
-    headers.append("X-Auth-Scopes-Kuci", "fkbr".parse().unwrap());
-    headers.append("X-Auth-Scopes-Kuci", "sxoe".parse().unwrap());
-    headers.append("X-Auth-Scopes-Sxoe", "kuci".parse().unwrap());
+    headers.append(HeaderName::from_static("X-Auth-Scopes-Kuci"), "fkbr".parse().unwrap());
+    headers.append(HeaderName::from_static("X-Auth-Scopes-Kuci"), "sxoe".parse().unwrap());
+    headers.append(HeaderName::from_static("X-Auth-Scopes-Sxoe"), "kuci".parse().unwrap());
 
     let scopes = extract_scopes_from_headers(&headers);
 

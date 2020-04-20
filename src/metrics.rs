@@ -1,9 +1,7 @@
 use super::Problem;
-use actix_web::dev::Resource;
 use actix_web::error::Error;
 use actix_web::http::{Method, StatusCode};
-use actix_web::middleware::{Finished, Middleware, Started};
-use actix_web::{HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, Resource};
 use futures::Future;
 use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEncoder};
 use std::time::Instant;
@@ -91,28 +89,28 @@ struct MetricsMiddleware {
   histogram: HistogramVec,
   path: String,
 }
-
-impl<S> Middleware<S> for MetricsMiddleware {
-  fn start(&self, req: &HttpRequest<S>) -> Result<Started, Error> {
-    req.extensions_mut().insert(Instant::now());
-    Ok(Started::Done)
-  }
-
-  /// Method is called after body stream get sent to peer.
-  fn finish(&self, req: &HttpRequest<S>, resp: &HttpResponse) -> Finished {
-    if let Some(start) = req.extensions().get::<Instant>() {
-      let method = req.method().as_str();
-      let path = self.path.as_str();
-      let status = StatusCategory::from_status(resp.status());
-      self
-        .histogram
-        .with_label_values(&[method, path, status.as_str()])
-        .observe(seconds_since(start));
-    }
-
-    Finished::Done
-  }
-}
+//
+// impl<S> Middleware<S> for MetricsMiddleware {
+//   fn start(&self, req: &HttpRequest<S>) -> Result<Started, Error> {
+//     req.extensions_mut().insert(Instant::now());
+//     Ok(Started::Done)
+//   }
+//
+//   /// Method is called after body stream get sent to peer.
+//   fn finish(&self, req: &HttpRequest<S>, resp: &HttpResponse) -> Finished {
+//     if let Some(start) = req.extensions().get::<Instant>() {
+//       let method = req.method().as_str();
+//       let path = self.path.as_str();
+//       let status = StatusCategory::from_status(resp.status());
+//       self
+//         .histogram
+//         .with_label_values(&[method, path, status.as_str()])
+//         .observe(seconds_since(start));
+//     }
+//
+//     Finished::Done
+//   }
+// }
 
 #[derive(Clone)]
 pub struct TimedActions {
@@ -131,7 +129,7 @@ impl TimedActions {
 
   pub fn time_async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
   where
-    F: Future<Item = U, Error = E>,
+    F: Future<Output = U>,
   {
     let histogram = self.histogram.clone();
     let start = Instant::now();
