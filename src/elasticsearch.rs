@@ -1,9 +1,9 @@
 use super::encode_url_component;
 use super::serde_field_value;
-use super::{IntoClientRequest, Problem};
-use actix_web::client::{ClientRequest, ClientBuilder};
+use super::{IntoSendRequest, Problem};
+use actix_web::client::{ClientRequest, ClientBuilder, ClientResponse};
 use bytes::Bytes;
-use futures::stream;
+use futures::{stream, Future};
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
@@ -13,6 +13,8 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
+use futures::future::TryFutureExt;
+use crate::AsyncBusinessResult;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
@@ -376,17 +378,22 @@ pub struct BulkActions<B, T>(pub B)
 where
   B: IntoIterator<Item = BulkAction<T>>;
 
-impl<B, T> IntoClientRequest for BulkActions<B, T>
+impl<B, T> IntoSendRequest for BulkActions<B, T>
 where
   B: IntoIterator<Item = BulkAction<T>> + 'static,
   T: serde::Serialize,
 {
-  fn apply_body(self, builder: &mut ClientBuilder) -> Result<ClientRequest, Problem> {
-    builder
-      .content_type("application/x-ndjson")
-      .streaming(stream::iter(self.0.into_iter().map(|a| a.to_bytes())))
-      .map_err(Problem::from)
+
+  type Result = T;
+  type FutureResult = AsyncBusinessResult<T>;
+
+  fn send(self, request: &mut actix_web::client::ClientRequest) -> Self::FutureResult {
+    request
+        .content_type("application/x-ndjson")
+        .send_stream(stream::iter(self.0.into_iter().map(|a| a.to_bytes())))
+        .map_err(Problem::from)
   }
+
 }
 
 pub struct ElasticsearchUrlBuilder {

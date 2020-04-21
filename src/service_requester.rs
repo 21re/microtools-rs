@@ -1,5 +1,5 @@
 use super::types;
-use crate::gatekeeper;
+use crate::{gatekeeper, AsyncBusinessResult};
 use crate::problem::Problem;
 use crate::ws_try;
 use actix::{Actor, Addr};
@@ -7,8 +7,12 @@ use actix_web::{client, http};
 use futures::{Future, FutureExt};
 use serde::Serialize;
 use url::form_urlencoded::byte_serialize;
-use actix_web::client::{Client, ClientRequest};
+use actix_web::client::{Client, ClientRequest, ClientBuilder, ClientResponse, SendRequestError};
 use std::convert::TryFrom;
+use crate::gatekeeper::Token;
+use crate::ws_try::WSTry;
+use futures::future::TryFutureExt;
+use std::pin::Pin;
 
 pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
   byte_serialize(value.as_ref()).collect::<String>()
@@ -17,11 +21,13 @@ pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
 #[derive(Clone)]
 pub struct ServiceRequester {
   token_creator: Addr<gatekeeper::TokenCreator>,
-  error_handler: &'static (dyn Fn(client::ClientResponse) -> Box<dyn Future<Output = Problem>> + Sync),
+  error_handler: &'static (dyn Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Problem>>> + Sync),
 }
 
-pub trait IntoClientRequest {
-  fn apply_body(self, builder: &mut client::ClientBuilder) -> Result<client::ClientRequest, Problem>;
+pub trait IntoSendRequest {
+  type Result;
+  type FutureResult: Future<Output = Result<Self::Result, Problem>>;
+  fn send(self, request: &mut client::ClientRequest) -> Self::FutureResult;
 }
 
 impl ServiceRequester {
@@ -43,106 +49,114 @@ impl ServiceRequester {
   }
 
   #[inline]
-  pub fn get<U, F, O>(&self, url: U) -> impl Future<Output = O>
+  pub fn get<'a, U, F, O >(&'a self, url: String) -> impl Future<Output = Result<O, Problem>> + 'a
   where
-    U: AsRef<str>,
-    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
+    O: ws_try::FromClientResponse<Result = O, FutureResult = F> + 'a,
+    F: Future<Output = Result<O, Problem>> + 'a,
   {
     self.without_body(http::Method::GET, url)
   }
 
   #[inline]
-  pub fn post<U, F, I, O>(&self, url: U, body: I) -> impl Future<Item = O, Error = Problem>
+  pub fn post<U, F, I, O>(&self, url: U, body: I) -> impl Future<Output = Result<O, Problem>>
   where
     U: AsRef<str>,
-    I: IntoClientRequest,
+    I: IntoSendRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
+    F: Future<Output = Result<O, Problem>>,
   {
     self.with_body(http::Method::POST, url, body)
   }
 
   #[inline]
-  pub fn put<U, F, I, O>(&self, url: U, body: I) -> impl Future<Item = O, Error = Problem>
+  pub fn put<U, F, I, O>(&self, url: U, body: I) -> impl Future<Output = Result<O, Problem>>
   where
     U: AsRef<str>,
-    I: IntoClientRequest,
+    I: IntoSendRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
+    F: Future<Output = Result<O, Problem>>,
   {
     self.with_body(http::Method::PUT, url, body)
   }
 
   #[inline]
-  pub fn patch<U, F, I, O>(&self, url: U, body: I) -> impl Future<Item = O, Error = Problem>
+  pub fn patch<U, F, I, O>(&self, url: U, body: I) -> impl Future<Output = Result<O, Problem>>
   where
     U: AsRef<str>,
-    I: IntoClientRequest,
+    I: IntoSendRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
+    F: Future<Output = Result<O, Problem>>,
   {
     self.with_body(http::Method::PATCH, url, body)
   }
 
   #[inline]
-  pub fn delete<U, F, O>(&self, url: U) -> impl Future<Item = O, Error = Problem>
+  pub fn delete<U, F, O>(&self, url: U) -> impl Future<Output = Result<O, Problem>>
   where
     U: AsRef<str>,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
+    F: Future<Output = Result<O, Problem>>,
   {
     self.without_body(http::Method::DELETE, url)
   }
 
-  pub fn with_body<U, F, I, O>(&self, method: http::Method, url: U, body: I) -> impl Future<Item = O, Error = Problem>
+  pub async fn with_body<F, I, O>(&self, method: http::Method, url: String, body: I) -> Result<O, Problem>
   where
-    U: AsRef<str>,
-    I: IntoClientRequest,
+    I: IntoSendRequest,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
-  {
-    let error_handler_ref = self.error_handler;
-    gatekeeper::get_token(&self.token_creator).and_then(move |token| {
-      let request = body.apply_body(
-        client::ClientRequest::build()
-          .method(method)
-          .uri(url)
-          .header("Authorization", format!("Bearer {}", token.raw)),
-      );
-
-      ws_try::expect_success_with_error::<_, F, O, _>(request, error_handler_ref)
-    })
-  }
-
-  pub async fn without_body<F, O>(&self, method: http::Method, url: String) -> O
-  where
-    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = O>,
+    F: Future<Output = Result<O, Problem>>,
   {
     let error_handler_ref = self.error_handler;
     let token = gatekeeper::get_token(&self.token_creator).await;
+    match token {
+          Ok(tok) => {
+            let mut request = Client::new().request(method, url)
+                       .header("Authorization", format!("Bearer {}", tok.raw));
 
-        token.and_then(move |token| {
-      let request = Client::new().request(method, url)
-        .header("Authorization", format!("Bearer {}", token.raw));
+            let res = ws_try::expect_success_with_error_with_body::< F, O, _, I>(request, error_handler_ref, body).await;
+            res
+          },
+          Err(e) => Err(e)
+        }
 
-      ws_try::expect_success_with_error::<_, F, O, _>(request, error_handler_ref)
-    })
+  }
+
+  pub async fn without_body<F, O>(&self, method: http::Method, url: String) -> Result<O, Problem>
+    where
+        O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
+        F: Future<Output = Result<O, Problem>> ,
+  {
+    let error_handler_ref = self.error_handler;
+    let token = gatekeeper::get_token(&self.token_creator).await;
+    match token {
+      Ok(tok) => {
+        let mut request = Client::new().request(method, url)
+            .header("Authorization", format!("Bearer {}", tok.raw));
+        ws_try::expect_success_with_error::< F, O, _>(request, error_handler_ref).await
+      },
+      Err(e) => Err(e)
+    }
+
   }
 }
 
-impl<S> IntoClientRequest for S
+impl<S> IntoSendRequest for S
 where
   S: Serialize,
 {
-  fn apply_body(self, builder: &mut client::ClientBuilder) -> Result<client::ClientRequest, Problem> {
-    builder.json(self).map_err(Problem::from)
+  type Result = S;
+  type FutureResult = AsyncBusinessResult<S>;
+
+  fn send(self, request: &mut client::ClientRequest) -> Self::FutureResult {
+    Box::pin(request.send_json(Self).map_err(Problem::from))
   }
 }
 
-impl IntoClientRequest for types::Done {
-  fn apply_body(self, builder: &mut client::ClientBuilder) -> Result<client::ClientRequest, Problem> {
-    builder.finish().map_err(Problem::from)
+impl IntoSendRequest for types::Done {
+  type Result = ClientResponse;
+  type FutureResult = AsyncBusinessResult<Self::Result>;
+
+  fn send(self, request: &mut client::ClientRequest) -> Self::FutureResult {
+    Box::new(request.send().map_err(Problem::from))
   }
 }

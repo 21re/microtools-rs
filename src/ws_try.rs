@@ -2,7 +2,7 @@ use crate::business_result::AsyncBusinessResult;
 use crate::problem::Problem;
 use crate::types::{Done, Lines};
 use actix_web::client;
-use actix_web::client::ClientResponse;
+use actix_web::client::{ClientResponse, ClientRequest};
 use actix_web::HttpMessage;
 use futures::{future, Future, Stream};
 use log::error;
@@ -10,16 +10,17 @@ use serde::de::DeserializeOwned;
 use std::time::Duration;
 use futures::task::{Poll, Context};
 use std::pin::Pin;
+use futures::future::TryFutureExt;
+
+use serde::Serialize;
+use crate::IntoSendRequest;
 
 const JSON_RESPONSE_LIMIT: usize = 100 * 1024 * 1024;
 
-pub trait IntoClientRequest {
-  fn into_request(self) -> Result<client::ClientRequest, Problem>;
-}
 
 pub trait FromClientResponse {
   type Result;
-  type FutureResult: Future<Output = Self::Result>;
+  type FutureResult: Future<Output = Result<Self::Result, Problem>>;
 
   fn from_response(response: &client::ClientResponse) -> Self::FutureResult;
 }
@@ -31,9 +32,11 @@ pub enum WSTry<F> {
 }
 
 impl<T, F> Future for WSTry<F>
+
 where
   F: Future<Output = T>,
 {
+  type Output = Result<T, Problem>;
 
   fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
     match self.state {
@@ -48,23 +51,15 @@ where
 
 }
 
-pub fn r#try<R>(request: R) -> impl Future<Item = client::ClientResponse, Error = Problem>
-where
-  R: IntoClientRequest,
-{
-  let client_request = match request.into_request() {
-    Ok(request) => request,
-    Err(problem) => return WSTry::Failure(problem),
-  };
-  let url = client_request.uri().to_string();
-  let method = client_request.method().to_string();
+pub fn try_without_body(request: ClientRequest) -> impl Future<Output = Result<client::ClientResponse, Problem>> {
+
+  let url = request.get_uri();
+  let method = request.get_method();
 
   WSTry::MayBeSuccess(
-    client_request
-      .send()
+    request
       .timeout(Duration::from_secs(60))
-      .conn_timeout(Duration::from_secs(20))
-      .wait_timeout(Duration::from_secs(60))
+      .send()
       .map_err(move |err| {
         error!("Request {} {} failed: {}", method, url, err);
         Problem::from(err)
@@ -72,39 +67,73 @@ where
   )
 }
 
-pub fn expect_success<R, F, T>(request: R) -> impl Future<Item = T, Error = Problem>
-where
-  R: IntoClientRequest,
-  T: FromClientResponse<Result = T, FutureResult = F>,
-  F: Future<Output = T>,
+pub fn try_with_body<B>(request: ClientRequest, body: B) -> impl Future<Output = Result<client::ClientResponse, Problem>>
+  where
+      B: IntoSendRequest,
 {
-  r#try(request).and_then(move |resp| {
-    if resp.status().is_success() {
-      WSTry::MayBeSuccess(T::from_response(resp))
-    } else {
-      WSTry::Failure(Problem::for_status(
-        resp.status().as_u16(),
-        format!("Service request failed: {}", resp.status()),
-      ))
-    }
-  })
+  let client_request = match request.into_request() {
+    Ok(request) => request,
+    Err(problem) => return WSTry::Failure(problem),
+  };
+  let url = client_request.get_uri();
+  let method = client_request.get_method();
+
+  WSTry::MayBeSuccess(
+    client_request
+        .timeout(Duration::from_secs(60))
+        .conn_timeout(Duration::from_secs(20))
+        .wait_timeout(Duration::from_secs(60))
+        .send_json(body)
+        .map_err(move |err| {
+          error!("Request {} {} failed: {}", method, url, err);
+          Problem::from(err)
+        }),
+  )
 }
 
-pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> impl Future<Output = T>
+pub async fn expect_success<F, T>(request: ClientRequest) -> Result<T, Problem>
 where
-  R: IntoClientRequest,
   T: FromClientResponse<Result = T, FutureResult = F>,
-  F: Future<Output = T>,
-  E: Fn(client::ClientResponse) -> Box<dyn Future<Output = Problem>>,
+  F: Future<Output = Result<T, Problem>>,
 {
-  r#try(request).and_then(move |resp| {
-    if resp.status().is_success() {
-      WSTry::MayBeSuccess(T::from_response(resp))
-    } else {
-      WSTry::FutureFailure(error_handler(resp))
-    }
-  })
+  match try_without_body(request).await {
+    Ok(resp) if resp.status().is_success() =>
+      T::from_response(&resp).await,
+    Ok(resp) => Err(Problem::internal_server_error().with_details("expect success")),
+    Err(e) => Err(e),
+  }
 }
+
+pub async fn expect_success_with_error_with_body<F, T, E, B>(request: ClientRequest, error_handler: E, body: B) -> Result<T, Problem>
+  where
+      F: Future<Output = Result<T, Problem>>,
+      T: FromClientResponse<Result = T, FutureResult = F>,
+      E: Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Problem>>>,
+      B: IntoSendRequest,
+{
+  match try_with_body(request, body).await {
+    Ok(resp) if resp.status().is_success() =>
+      T::from_response(&resp).await,
+    Ok(resp) => Err(error_handler(resp).await),
+    Err(e) => Err(e),
+  }
+}
+
+
+pub async fn expect_success_with_error<F, T, E>(request: ClientRequest, error_handler: E) -> Result<T, Problem>
+where
+  T: FromClientResponse<Result = T, FutureResult = F>,
+  F: Future<Output = Result<T, Problem>>,
+  E: Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Problem>>>,
+{
+  match try_without_body(request).await {
+    Ok(resp) if resp.status().is_success() =>
+      T::from_response(&resp).await,
+    Ok(resp) => Err(error_handler(resp).await),
+    Err(e) => Err(e),
+    }
+  }
+
 
 #[allow(clippy::needless_pass_by_value)]
 pub fn default_error_handler(response: client::ClientResponse) -> Box<dyn Future<Output = Problem>> {
@@ -114,38 +143,20 @@ pub fn default_error_handler(response: client::ClientResponse) -> Box<dyn Future
   )))
 }
 
-impl IntoClientRequest for client::ClientRequest {
-  fn into_request(self) -> Result<client::ClientRequest, Problem> {
-    Ok(self)
-  }
-}
 
-impl IntoClientRequest for client::ClientBuilder {
-  fn into_request(mut self) -> Result<client::ClientRequest, Problem> {
-    self.finish().map_err(Problem::from)
-  }
-}
-
-impl<E> IntoClientRequest for Result<client::ClientRequest, E>
+impl<T> FromClientResponse for T
 where
-  E: Into<Problem>,
+  T: DeserializeOwned + 'static,
 {
-  fn into_request(self) -> Result<client::ClientRequest, Problem> {
-    self.map_err(E::into)
+  type Result = T;
+  type FutureResult = AsyncBusinessResult<T>;
+
+  fn from_response(mut response: actix_web::client::ClientResponse) -> Self::FutureResult {
+    Box::new( response.json().limit(JSON_RESPONSE_LIMIT))
+
+        //.map_err(Problem::from)
   }
 }
-//
-// impl<T> FromClientResponse for T
-// where
-//   T: DeserializeOwned + 'static,
-// {
-//   type Result = T;
-//   type FutureResult = AsyncBusinessResult<T>;
-//
-//   fn from_response(mut response: actix_web::client::ClientResponse) -> Self::FutureResult {
-//     Box::new(response.json().limit(JSON_RESPONSE_LIMIT).map_err(Problem::from))
-//   }
-// }
 
 // impl FromClientResponse for Done {
 //   type Result = Done;
