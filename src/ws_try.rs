@@ -56,14 +56,13 @@ pub fn try_without_body(request: ClientRequest) -> impl Future<Output = Result<c
   let url = request.get_uri();
   let method = request.get_method();
 
-  WSTry::MayBeSuccess(
     request
       .timeout(Duration::from_secs(60))
       .send()
       .map_err(move |err| {
         error!("Request {} {} failed: {}", method, url, err);
         Problem::from(err)
-      }),
+      }
   )
 }
 
