@@ -19,8 +19,8 @@ impl Status {
   }
 }
 
-pub fn status_resource<V: ToString, S: 'static>(version: Option<V>) -> impl FnOnce(&mut Resource<S>) -> () {
-  let status = Status::new(version);
-
-  |r: &mut Resource<S>| r.method(Method::GET).f(move |_| status.status())
-}
+// pub fn status_resource<V: ToString, S: 'static>(version: Option<V>) -> impl FnOnce(&mut Resource<S>) -> () {
+//   let status = Status::new(version);
+//
+//   |r: &mut Resource<S>| r.method(Method::GET).f(move |_| status.status())
+// }

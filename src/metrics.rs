@@ -7,23 +7,23 @@ use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEnc
 use std::time::Instant;
 use crate::BusinessResult;
 
-pub fn metrics_resource<S: 'static>(r: &mut Resource<S>) {
-  let encoder = TextEncoder::new();
-
-  r.method(Method::GET).f(move |_| {
-    let metrics = gather();
-    let mut buffer = vec![];
-
-    match encoder.encode(&metrics, &mut buffer) {
-      Ok(_) => Ok(
-        HttpResponse::build(StatusCode::OK)
-          .content_type(encoder.format_type())
-          .body(buffer),
-      ),
-      Err(err) => Err(Problem::internal_server_error().with_details(format!("{}", err))),
-    }
-  });
-}
+// pub fn metrics_resource<S: 'static>(r: &mut Resource<S>) {
+//   let encoder = TextEncoder::new();
+//
+//   r.method(Method::GET).f(move |_| {
+//     let metrics = gather();
+//     let mut buffer = vec![];
+//
+//     match encoder.encode(&metrics, &mut buffer) {
+//       Ok(_) => Ok(
+//         HttpResponse::build(StatusCode::OK)
+//           .content_type(encoder.format_type())
+//           .body(buffer),
+//       ),
+//       Err(err) => Err(Problem::internal_server_error().with_details(format!("{}", err))),
+//     }
+//   });
+// }
 
 #[inline]
 fn seconds_since(start: &Instant) -> f64 {
@@ -77,13 +77,13 @@ impl ResourceTimer {
     ResourceTimer { histogram }
   }
 
-  pub fn measure<S: 'static>(&self, r: &mut Resource<S>) {
-    let pattern = r.rdef().pattern().to_string();
-    r.middleware(MetricsMiddleware {
-      histogram: self.histogram.clone(),
-      path: pattern,
-    })
-  }
+  // pub fn measure<S: 'static>(&self, r: &mut Resource<S>) {
+  //   let pattern = r.name;
+  //   r.middleware(MetricsMiddleware {
+  //     histogram: self.histogram.clone(),
+  //     path: pattern,
+  //   })
+  // }
 }
 
 struct MetricsMiddleware {
@@ -128,7 +128,7 @@ impl TimedActions {
     TimedActions { histogram }
   }
 
-  pub fn time_async<F, U, T>(&self, action: &'static str, f: F) ->  Future<Output = BusinessResult<T>>
+  pub async fn time_async<F, U, T>(&self, action: &'static str, f: F) ->  BusinessResult<T>
   where
     F: Future<Output = BusinessResult<T>>,
   {
@@ -136,14 +136,14 @@ impl TimedActions {
     let start = Instant::now();
 
 
-    f.then(move |result| {
+    let result = f.await;
       let outcome = if result.is_ok() { "ok" } else { "err" };
 
       histogram
         .with_label_values(&[action, outcome])
         .observe(seconds_since(&start));
       result
-    })
+
   }
 
   pub fn time_sync<F, U, E>(&self, action: &str, f: F) -> Result<U, E>

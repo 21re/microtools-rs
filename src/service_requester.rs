@@ -21,7 +21,7 @@ pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
 #[derive(Clone)]
 pub struct ServiceRequester {
   token_creator: Addr<gatekeeper::TokenCreator>,
-  error_handler: &'static (dyn Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Problem>>> + Sync),
+  error_handler: &'static (dyn Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<Problem, ()>>>> + Sync),
 }
 
 pub trait IntoSendRequest {
@@ -40,7 +40,7 @@ impl ServiceRequester {
 
   pub fn with_error_handler(
     &self,
-    error_handler: &'static (dyn Fn(client::ClientResponse) -> Box<dyn Future<Output = Problem>> + Sync),
+    error_handler: &'static (dyn Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Problem>>> + Sync),
   ) -> Self {
     ServiceRequester {
       token_creator: self.token_creator.clone(),
@@ -58,51 +58,47 @@ impl ServiceRequester {
   }
 
   #[inline]
-  pub fn post<U, F, I, O>(&self, url: U, body: I) -> impl Future<Output = Result<O, Problem>>
+  pub fn post<'a, U, F, I, O>(&'a self, url: String, body: I) -> impl Future<Output = Result<O, Problem>> + 'a
   where
-    U: AsRef<str>,
-    I: IntoSendRequest,
-    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = Result<O, Problem>>,
+    I: IntoSendRequest + Serialize + 'a,
+    O: ws_try::FromClientResponse<Result = O, FutureResult = F> + 'a,
+    F: Future<Output = Result<O, Problem>> + 'a,
   {
     self.with_body(http::Method::POST, url, body)
   }
 
   #[inline]
-  pub fn put<U, F, I, O>(&self, url: U, body: I) -> impl Future<Output = Result<O, Problem>>
+  pub fn put<'a, U, F, I, O>(&'a self, url: String, body: I) -> impl Future<Output = Result<O, Problem>> + 'a
   where
-    U: AsRef<str>,
-    I: IntoSendRequest,
-    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = Result<O, Problem>>,
+    I: IntoSendRequest + Serialize +'a,
+    O: ws_try::FromClientResponse<Result = O, FutureResult = F> +'a,
+    F: Future<Output = Result<O, Problem>> +'a,
   {
     self.with_body(http::Method::PUT, url, body)
   }
 
   #[inline]
-  pub fn patch<U, F, I, O>(&self, url: U, body: I) -> impl Future<Output = Result<O, Problem>>
+  pub fn patch<'a, U, F, I, O>(&'a self, url: String, body: I) -> impl Future<Output = Result<O, Problem>> +'a
   where
-    U: AsRef<str>,
-    I: IntoSendRequest,
-    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = Result<O, Problem>>,
+    I: IntoSendRequest + Serialize +'a,
+    O: ws_try::FromClientResponse<Result = O, FutureResult = F> +'a,
+    F: Future<Output = Result<O, Problem>> +'a,
   {
     self.with_body(http::Method::PATCH, url, body)
   }
 
   #[inline]
-  pub fn delete<U, F, O>(&self, url: U) -> impl Future<Output = Result<O, Problem>>
+  pub fn delete<'a, U, F, O>(&'a self, url: String) -> impl Future<Output = Result<O, Problem>> +'a
   where
-    U: AsRef<str>,
-    O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
-    F: Future<Output = Result<O, Problem>>,
+    O: ws_try::FromClientResponse<Result = O, FutureResult = F> +'a,
+    F: Future<Output = Result<O, Problem>> +'a,
   {
     self.without_body(http::Method::DELETE, url)
   }
 
   pub async fn with_body<F, I, O>(&self, method: http::Method, url: String, body: I) -> Result<O, Problem>
   where
-    I: IntoSendRequest,
+    I: IntoSendRequest + Serialize,
     O: ws_try::FromClientResponse<Result = O, FutureResult = F>,
     F: Future<Output = Result<O, Problem>>,
   {
@@ -144,11 +140,11 @@ impl<S> IntoSendRequest for S
 where
   S: Serialize,
 {
-  type Result = S;
-  type FutureResult = AsyncBusinessResult<S>;
+  type Result = ClientResponse;
+  type FutureResult = AsyncBusinessResult<Self::Result>;
 
   fn send(self, request: &mut client::ClientRequest) -> Self::FutureResult {
-    Box::pin(request.send_json(Self).map_err(Problem::from))
+    Box::pin(request.send_json(&self).map_err(Problem::from))
   }
 }
 
@@ -157,6 +153,6 @@ impl IntoSendRequest for types::Done {
   type FutureResult = AsyncBusinessResult<Self::Result>;
 
   fn send(self, request: &mut client::ClientRequest) -> Self::FutureResult {
-    Box::new(request.send().map_err(Problem::from))
+    Box::pin(request.send().map_err(Problem::from))
   }
 }

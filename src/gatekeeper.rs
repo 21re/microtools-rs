@@ -1,9 +1,10 @@
-use crate::business_result::BusinessResult;
+use crate::business_result::{BusinessResult, success};
 use crate::problem::Problem;
-use crate::ws_try;
+use crate::{ws_try, ServiceRequester};
+use crate::service_requester;
 use actix::{Actor, ActorResponse, Context, Handler, Message, WrapFuture};
 use actix_web::client;
-use futures::{Future, FutureExt};
+use futures::{Future, FutureExt, TryFutureExt, future};
 use log::error;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -11,6 +12,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use actix_web::client::Client;
 use actix::fut::ready;
 use actix::prelude::*;
+use crate::ws_try::{try_with_body, FromClientResponse};
+use actix_web::web::post;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {
@@ -70,21 +73,23 @@ impl Handler<GetToken> for TokenCreator {
     match self.current {
       Some(ref token) if token.expires > unixtime => ActorResponse::reply(Ok(token.clone())),
       _ => {
-        let token_request = match Client::default().post("http://localhost:12345/v1/tokens")
+        let token_response = Client::default().post("http://localhost:12345/v1/tokens")
           .timeout(Duration::from_secs(30))
-          .json(&self.claims)
-        {
-          Ok(request) => request,
-          Err(error) => {
-            error!("Token request failed: {}", error);
-            return ActorResponse::reply(Err(Problem::from(error)));
-          }
-        };
+          .send_json(&self.claims).map_err(|p|Problem::from(p)).and_then(|resp|Token::from_response(&resp));
 
-        ActorResponse::r#async(ws_try::expect_success(token_request).into_actor(self).map(
-          |token: Token, actor: &mut TokenCreator, _| {
-            actor.current = Some(token.clone());
-            token
+
+        ActorResponse::r#async(token_response.into_actor(self).map(
+          |token: Result<Token, Problem>, actor: &mut TokenCreator, _| {
+            match token {
+              Ok(tok) => {
+                actor.current = Some(tok.clone());
+                Ok(tok)
+              },
+              Err(p) => {
+                println!("error get new token from gatekeeper: {}", p);
+                Err(p)
+              },
+            }
           },
         ))
       }

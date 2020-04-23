@@ -384,14 +384,14 @@ where
   T: serde::Serialize,
 {
 
-  type Result = T;
-  type FutureResult = AsyncBusinessResult<T>;
+  type Result = ClientResponse;
+  type FutureResult = AsyncBusinessResult<ClientResponse>;
 
   fn send(self, request: &mut actix_web::client::ClientRequest) -> Self::FutureResult {
-    request
+    Box::pin(request
         .content_type("application/x-ndjson")
         .send_stream(stream::iter(self.0.into_iter().map(|a| a.to_bytes())))
-        .map_err(Problem::from)
+        .map_err(Problem::from))
   }
 
 }
