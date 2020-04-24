@@ -4,7 +4,7 @@ use crate::types::{Done, Lines};
 use actix_web::client;
 use actix_web::client::{Client, ClientResponse, ClientRequest, SendRequestError};
 use actix_web::HttpMessage;
-use futures::{future, Future, Stream, StreamExt};
+use futures::{future, Future, Stream, StreamExt, TryStreamExt};
 use log::error;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
@@ -99,15 +99,18 @@ pub async fn expect_success_with_error_with_body<F, T, E, B>(request: ClientRequ
   where
       F: Future<Output = Result<T, Problem>>,
       T: FromClientResponse<Result = T, FutureResult = F>,
-      E: Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<Problem, ()>>>>,
+      E: Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<Problem, Problem>>>>,
       B: IntoSendRequest + Serialize,
 {
   match try_with_body(request, body).await {
     Ok(resp) if resp.status().is_success() =>
       T::from_response(&resp).await,
     Ok(resp) => {
-      error_handler(resp).await
-      Err()
+      match error_handler(resp).await {
+       Ok(p) => Err(p),
+       Err(p) => Err(p),
+      }
+
     },
     Err(e) => Err(e),
   }
@@ -118,23 +121,26 @@ pub async fn expect_success_with_error<F, T, E>(request: ClientRequest, error_ha
 where
   T: FromClientResponse<Result = T, FutureResult = F>,
   F: Future<Output = Result<T, Problem>>,
-  E: Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<Problem, ()>>>>,
+  E: Fn(client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<Problem, Problem>>>>,
 {
   match try_without_body(request).await {
     Ok(resp) if resp.status().is_success() =>
       T::from_response(&resp).await,
-    Ok(resp) => Err(error_handler(resp).await),
+    Ok(resp) => match error_handler(resp).await{
+      Ok(p) => Err(p),
+      Err(p)=> Err(p),
+    },
     Err(e) => Err(e),
     }
   }
 
 
 #[allow(clippy::needless_pass_by_value)]
-pub fn default_error_handler(response: client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<(), Problem>>>> {
-  Box::pin(future::ok(Some(Problem::for_status(
+pub fn default_error_handler(response: client::ClientResponse) -> Pin<Box<dyn Future<Output = Result<Problem, Problem>>>> {
+  Box::pin(future::ok::<Problem, Problem>(Problem::for_status(
     response.status().as_u16(),
     format!("Service request failed: {}", response.status()),
-  ))))
+  )))
 }
 
 

@@ -36,10 +36,12 @@ pub struct TokenCreator {
   current: Option<Token>,
 }
 
-pub async fn get_token(actor: &actix::Addr<TokenCreator>) ->  BusinessResult<Token> {
+pub async fn get_token(actor: &actix::Addr<TokenCreator>) ->  Result<Token, Problem> {
   match actor.send(GetToken).await {
-    Ok(res) => res
+    Ok(inner_result) => inner_result,
+    Err(mbr) => Err(Problem::from(mbr)),
   }
+
 }
 
 impl TokenCreator {
@@ -100,3 +102,4 @@ impl Handler<GetToken> for TokenCreator {
 impl Actor for TokenCreator {
   type Context = Context<Self>;
 }
+

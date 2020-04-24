@@ -96,6 +96,22 @@ impl From<std::env::VarError> for Problem {
   }
 }
 
+impl From<actix_web::error::JsonPayloadError> for Problem {
+  fn from(error: actix_web::error::JsonPayloadError) -> Problem {
+    error!("IO: {}", error);
+
+    Problem::internal_server_error().with_details(format!("JsonPayloadError: {}", error))
+  }
+}
+
+impl From<awc::error::JsonPayloadError> for Problem {
+  fn from(error: awc::error::JsonPayloadError) -> Problem {
+    error!("IO: {}", error);
+
+    Problem::internal_server_error().with_details(format!("JsonPayloadError: {}", error))
+  }
+}
+
 impl From<std::io::Error> for Problem {
   fn from(error: std::io::Error) -> Problem {
     error!("IO: {}", error);
@@ -202,13 +218,6 @@ impl From<actix_web::error::ContentTypeError> for Problem {
   }
 }
 
-impl From<actix_web::error::JsonPayloadError> for Problem {
-  fn from(error: actix_web::error::JsonPayloadError) -> Self {
-    error!("Http json type: {}", error);
-
-    Problem::internal_server_error().with_details(format!("Http json payload: {}", error))
-  }
-}
 
 impl From<actix::MailboxError> for Problem {
   fn from(error: actix::MailboxError) -> Self {
