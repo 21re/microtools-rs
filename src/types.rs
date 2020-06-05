@@ -1,17 +1,5 @@
-use crate::problem::Problem;
-use actix_web::{HttpRequest, HttpResponse, Responder};
-
 #[derive(Clone, Debug)]
 pub struct Done;
-
-impl Responder for Done {
-  type Item = HttpResponse;
-  type Error = Problem;
-
-  fn respond_to<S: 'static>(self, _req: &HttpRequest<S>) -> Result<HttpResponse, Problem> {
-    Ok(HttpResponse::NoContent().finish())
-  }
-}
 
 #[derive(Clone, Debug)]
 pub struct Lines(Vec<String>);

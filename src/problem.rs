@@ -1,5 +1,4 @@
 use actix;
-use actix_web;
 use log::error;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -124,93 +123,19 @@ impl From<std::str::Utf8Error> for Problem {
   }
 }
 
-impl From<actix_web::error::Error> for Problem {
-  fn from(error: actix_web::Error) -> Problem {
-    error!("Actix: {}", error);
-
-    Problem::internal_server_error().with_details(format!("Actix: {}", error))
-  }
-}
-
-impl actix_web::error::ResponseError for Problem {
-  fn error_response(&self) -> actix_web::HttpResponse {
-    actix_web::HttpResponse::build(
-      actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
-    )
-    .json(self)
-  }
-}
-
-impl actix_web::Responder for Problem {
-  type Item = actix_web::HttpResponse;
-  type Error = Problem;
-
-  fn respond_to<S: 'static>(self, _req: &actix_web::HttpRequest<S>) -> Result<actix_web::HttpResponse, Problem> {
-    Ok(
-      actix_web::HttpResponse::build(
-        actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
-      )
-      .json(self),
-    )
-  }
-}
-
-impl From<actix_web::client::SendRequestError> for Problem {
-  fn from(error: actix_web::client::SendRequestError) -> Problem {
-    use actix_web::client::SendRequestError::*;
-
-    error!("Http client: {}", error);
-
-    match error {
-      Timeout => Problem::internal_server_error().with_details("Request timeout"),
-      Connector(err) => Problem::internal_server_error().with_details(format!("HTTP connection error: {}", err)),
-      ParseError(err) => Problem::internal_server_error().with_details(format!("Invalid HTTP response: {}", err)),
-      Io(err) => Problem::from(err),
-    }
-  }
-}
-
-impl From<actix_web::error::PayloadError> for Problem {
-  fn from(error: actix_web::error::PayloadError) -> Self {
-    error!("Http payload: {}", error);
-    Problem::internal_server_error().with_details(format!("Http payload: {}", error))
-  }
-}
-
-impl From<actix_web::error::ReadlinesError> for Problem {
-  fn from(error: actix_web::error::ReadlinesError) -> Self {
-    use actix_web::error::ReadlinesError::*;
-
-    match error {
-      EncodingError => Problem::internal_server_error().with_details("Readline: Invalid encoding"),
-      PayloadError(error) => Problem::from(error),
-      LimitOverflow => Problem::internal_server_error().with_details("Readline: Limit exeeded"),
-      ContentTypeError(error) => Problem::from(error),
-    }
-  }
-}
-
-impl From<actix_web::error::ContentTypeError> for Problem {
-  fn from(error: actix_web::error::ContentTypeError) -> Self {
-    error!("Http content type: {}", error);
-
-    Problem::internal_server_error().with_details(format!("Http content type: {}", error))
-  }
-}
-
-impl From<actix_web::error::JsonPayloadError> for Problem {
-  fn from(error: actix_web::error::JsonPayloadError) -> Self {
-    error!("Http json type: {}", error);
-
-    Problem::internal_server_error().with_details(format!("Http json payload: {}", error))
-  }
-}
-
 impl From<actix::MailboxError> for Problem {
-  fn from(error: actix::MailboxError) -> Self {
-    error!("Actix mailbox error: {}", error);
+  fn from(error: actix::MailboxError) -> Problem {
+    error!("Actix error: {}", error);
 
-    Problem::internal_server_error().with_details(format!("Actix mailbox error: {}", error))
+    Problem::internal_server_error().with_details(format!("Actix error: {}", error))
+  }
+}
+
+impl From<reqwest::Error> for Problem {
+  fn from(error: reqwest::Error) -> Problem {
+    error!("Reqwest: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Reqwest: {}", error))
   }
 }
 

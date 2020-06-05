@@ -1,4 +1,3 @@
-use actix_web::Result;
 use std::str::FromStr;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -16,9 +15,9 @@ static SERVICE_SUBJECT: &str = "service/";
 static API_SUBJECT: &str = "api/";
 
 impl FromStr for Subject {
-  type Err = ::actix_web::error::Error;
+  type Err = ();
 
-  fn from_str(subject: &str) -> Result<Subject> {
+  fn from_str(subject: &str) -> Result<Subject, Self::Err> {
     match subject {
       subject if subject.starts_with(ADMIN_SUBJECT) => Ok(Subject::Admin(subject.replace(ADMIN_SUBJECT, ""))),
       subject if subject.starts_with(CUSTOMER_SUBJECT) => Ok(Subject::Customer(subject.replace(CUSTOMER_SUBJECT, ""))),

@@ -1,9 +1,7 @@
 use super::encode_url_component;
 use super::serde_field_value;
-use super::{IntoClientRequest, Problem};
-use actix_web::client::{ClientRequest, ClientRequestBuilder};
+use super::Problem;
 use bytes::Bytes;
-use futures::stream;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
@@ -375,19 +373,6 @@ where
 pub struct BulkActions<B, T>(pub B)
 where
   B: IntoIterator<Item = BulkAction<T>>;
-
-impl<B, T> IntoClientRequest for BulkActions<B, T>
-where
-  B: IntoIterator<Item = BulkAction<T>> + 'static,
-  T: serde::Serialize,
-{
-  fn apply_body(self, builder: &mut ClientRequestBuilder) -> Result<ClientRequest, Problem> {
-    builder
-      .content_type("application/x-ndjson")
-      .streaming(stream::iter_result(self.0.into_iter().map(|a| a.to_bytes())))
-      .map_err(Problem::from)
-  }
-}
 
 pub struct ElasticsearchUrlBuilder {
   elasticsearch_base_url: String,

@@ -1,30 +1,6 @@
-use super::Problem;
-use actix_web::dev::Resource;
-use actix_web::error::Error;
-use actix_web::http::{Method, StatusCode};
-use actix_web::middleware::{Finished, Middleware, Started};
-use actix_web::{HttpRequest, HttpResponse};
 use futures::Future;
-use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEncoder};
+use prometheus::{register, HistogramOpts, HistogramVec};
 use std::time::Instant;
-
-pub fn metrics_resource<S: 'static>(r: &mut Resource<S>) {
-  let encoder = TextEncoder::new();
-
-  r.method(Method::GET).f(move |_| {
-    let metrics = gather();
-    let mut buffer = vec![];
-
-    match encoder.encode(&metrics, &mut buffer) {
-      Ok(_) => Ok(
-        HttpResponse::build(StatusCode::OK)
-          .content_type(encoder.format_type())
-          .body(buffer),
-      ),
-      Err(err) => Err(Problem::internal_server_error().with_details(format!("{}", err))),
-    }
-  });
-}
 
 #[inline]
 fn seconds_since(start: &Instant) -> f64 {
@@ -42,14 +18,14 @@ enum StatusCategory {
 }
 
 impl StatusCategory {
-  fn from_status(status: StatusCode) -> StatusCategory {
+  /*  fn from_status(status: StatusCode) -> StatusCategory {
     match status.as_u16() {
       200..=299 => StatusCategory::Ok,
       300..=399 => StatusCategory::Redirect,
       400..=499 => StatusCategory::ClientError,
       _ => StatusCategory::InternalError,
     }
-  }
+  }*/
 }
 
 impl StatusCategory {
@@ -78,40 +54,14 @@ impl ResourceTimer {
     ResourceTimer { histogram }
   }
 
+  /*
   pub fn measure<S: 'static>(&self, r: &mut Resource<S>) {
     let pattern = r.rdef().pattern().to_string();
     r.middleware(MetricsMiddleware {
       histogram: self.histogram.clone(),
       path: pattern,
     })
-  }
-}
-
-struct MetricsMiddleware {
-  histogram: HistogramVec,
-  path: String,
-}
-
-impl<S> Middleware<S> for MetricsMiddleware {
-  fn start(&self, req: &HttpRequest<S>) -> Result<Started, Error> {
-    req.extensions_mut().insert(Instant::now());
-    Ok(Started::Done)
-  }
-
-  /// Method is called after body stream get sent to peer.
-  fn finish(&self, req: &HttpRequest<S>, resp: &HttpResponse) -> Finished {
-    if let Some(start) = req.extensions().get::<Instant>() {
-      let method = req.method().as_str();
-      let path = self.path.as_str();
-      let status = StatusCategory::from_status(resp.status());
-      self
-        .histogram
-        .with_label_values(&[method, path, status.as_str()])
-        .observe(seconds_since(start));
-    }
-
-    Finished::Done
-  }
+  }*/
 }
 
 #[derive(Clone)]
@@ -129,21 +79,21 @@ impl TimedActions {
     TimedActions { histogram }
   }
 
-  pub fn time_async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
+  pub async fn time_async<F, U, E>(&self, action: &'static str, f: F) -> Result<U, E>
   where
-    F: Future<Item = U, Error = E>,
+    F: Future<Output = Result<U, E>>,
   {
     let histogram = self.histogram.clone();
     let start = Instant::now();
 
-    f.then(move |result| {
-      let outcome = if result.is_ok() { "ok" } else { "err" };
+    let result = f.await;
 
-      histogram
-        .with_label_values(&[action, outcome])
-        .observe(seconds_since(&start));
-      result
-    })
+    let outcome = if result.is_ok() { "ok" } else { "err" };
+
+    histogram
+      .with_label_values(&[action, outcome])
+      .observe(seconds_since(&start));
+    result
   }
 
   pub fn time_sync<F, U, E>(&self, action: &str, f: F) -> Result<U, E>

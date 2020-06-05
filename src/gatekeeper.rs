@@ -1,12 +1,8 @@
 use crate::business_result::BusinessResult;
-use crate::problem::Problem;
-use crate::ws_try;
-use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFuture};
-use actix_web::client;
-use futures::Future;
-use log::error;
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -21,17 +17,10 @@ pub struct Token {
   pub claims: Map<String, Value>,
 }
 
-#[derive(Message)]
-#[rtype(result = "BusinessResult<Token>")]
-struct GetToken;
-
 pub struct TokenCreator {
   claims: Map<String, Value>,
-  current: Option<Token>,
-}
-
-pub fn get_token(actor: &actix::Addr<TokenCreator>) -> impl Future<Item = Token, Error = Problem> {
-  actor.send(GetToken).flatten()
+  current: Mutex<Option<Token>>,
+  client: Client,
 }
 
 impl TokenCreator {
@@ -49,44 +38,34 @@ impl TokenCreator {
 
     claims.insert("scopes".to_string(), Value::Object(scopes_map));
 
-    TokenCreator { claims, current: None }
+    TokenCreator {
+      claims,
+      current: Mutex::new(None),
+      client: Client::new(),
+    }
   }
-}
 
-impl Handler<GetToken> for TokenCreator {
-  type Result = ActorResponse<Self, Token, Problem>;
-
-  fn handle(&mut self, _msg: GetToken, _ctx: &mut actix::Context<TokenCreator>) -> Self::Result {
+  pub async fn get_token(&mut self) -> BusinessResult<Token> {
     let now_plus_grace = SystemTime::now() + Duration::from_secs(60);
-    let unixtime = match now_plus_grace.duration_since(UNIX_EPOCH) {
-      Ok(duration) => duration.as_secs(),
-      Err(error) => return ActorResponse::reply(Err(Problem::from(error))),
-    };
-    match self.current {
-      Some(ref token) if token.expires > unixtime => ActorResponse::reply(Ok(token.clone())),
-      _ => {
-        let token_request = match client::post("http://localhost:12345/v1/tokens")
-          .timeout(Duration::from_secs(30))
-          .json(&self.claims)
-        {
-          Ok(request) => request,
-          Err(error) => {
-            error!("Token request failed: {}", error);
-            return ActorResponse::reply(Err(Problem::from(error)));
-          }
-        };
+    let unixtime = now_plus_grace.duration_since(UNIX_EPOCH)?.as_secs();
+    let current = self.current.get_mut()?;
 
-        ActorResponse::r#async(ws_try::expect_success(token_request).into_actor(self).map(
-          |token: Token, actor: &mut TokenCreator, _| {
-            actor.current = Some(token.clone());
-            token
-          },
-        ))
+    match current.as_ref() {
+      Some(token) if token.expires > unixtime => Ok(token.clone()),
+      _ => {
+        let response = self
+        .client
+        .post("http://localhost:12345/v1/tokens")
+        .timeout(Duration::from_secs(30))
+        .json(&self.claims)
+        .send()
+        .await?;
+        let next_token = response.json::<Token>().await?;
+
+        current.replace(next_token.clone());
+
+        Ok(next_token)  
       }
     }
   }
-}
-
-impl Actor for TokenCreator {
-  type Context = Context<Self>;
 }
