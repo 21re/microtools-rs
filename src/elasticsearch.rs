@@ -1,7 +1,8 @@
 use super::encode_url_component;
 use super::serde_field_value;
 use super::{IntoClientRequest, Problem};
-use actix_web::client::{ClientRequest, ClientRequestBuilder};
+use actix_web::client::ClientRequest;
+use awc::SendClientRequest;
 use bytes::Bytes;
 use futures::stream;
 use serde::de::{MapAccess, Visitor};
@@ -381,11 +382,10 @@ where
   B: IntoIterator<Item = BulkAction<T>> + 'static,
   T: serde::Serialize,
 {
-  fn apply_body(self, builder: &mut ClientRequestBuilder) -> Result<ClientRequest, Problem> {
-    builder
+  fn apply_body(self, request: ClientRequest) -> SendClientRequest {
+    request
       .content_type("application/x-ndjson")
-      .streaming(stream::iter_result(self.0.into_iter().map(|a| a.to_bytes())))
-      .map_err(Problem::from)
+      .send_stream(stream::iter(self.0.into_iter().map(|a| a.to_bytes())))
   }
 }
 

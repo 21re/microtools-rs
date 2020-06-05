@@ -1,29 +1,22 @@
 use super::Problem;
-use actix_web::dev::Resource;
-use actix_web::error::Error;
-use actix_web::http::{Method, StatusCode};
-use actix_web::middleware::{Finished, Middleware, Started};
-use actix_web::{HttpRequest, HttpResponse};
+use actix_web::{web, HttpResponse, Resource, ResponseError};
 use futures::Future;
 use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEncoder};
 use std::time::Instant;
 
-pub fn metrics_resource<S: 'static>(r: &mut Resource<S>) {
-  let encoder = TextEncoder::new();
-
-  r.method(Method::GET).f(move |_| {
+pub fn metrics_resource() -> Resource {
+  web::resource("/internal/metrics").route(web::get().to(|| {
+    let encoder = TextEncoder::new();
     let metrics = gather();
     let mut buffer = vec![];
 
     match encoder.encode(&metrics, &mut buffer) {
-      Ok(_) => Ok(
-        HttpResponse::build(StatusCode::OK)
-          .content_type(encoder.format_type())
-          .body(buffer),
-      ),
-      Err(err) => Err(Problem::internal_server_error().with_details(format!("{}", err))),
+      Ok(_) => HttpResponse::Ok().content_type(encoder.format_type()).body(buffer),
+      Err(err) => Problem::internal_server_error()
+        .with_details(format!("{}", err))
+        .error_response(),
     }
-  });
+  }))
 }
 
 #[inline]
@@ -33,6 +26,7 @@ fn seconds_since(start: &Instant) -> f64 {
   d.as_secs() as f64 + nanos
 }
 
+/*
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum StatusCategory {
   Ok,
@@ -78,7 +72,7 @@ impl ResourceTimer {
     ResourceTimer { histogram }
   }
 
-  pub fn measure<S: 'static>(&self, r: &mut Resource<S>) {
+  pub fn measure<S: 'static>(&self, r: &mut Route) {
     let pattern = r.rdef().pattern().to_string();
     r.middleware(MetricsMiddleware {
       histogram: self.histogram.clone(),
@@ -113,6 +107,7 @@ impl<S> Middleware<S> for MetricsMiddleware {
     Finished::Done
   }
 }
+*/
 
 #[derive(Clone)]
 pub struct TimedActions {
@@ -129,21 +124,20 @@ impl TimedActions {
     TimedActions { histogram }
   }
 
-  pub fn time_async<F, U, E>(&self, action: &'static str, f: F) -> impl Future<Item = U, Error = E>
+  pub async fn time_async<F, U, E>(&self, action: &'static str, f: F) -> Result<U, E>
   where
-    F: Future<Item = U, Error = E>,
+    F: Future<Output = Result<U, E>>,
   {
     let histogram = self.histogram.clone();
     let start = Instant::now();
+    let result = f.await;
 
-    f.then(move |result| {
-      let outcome = if result.is_ok() { "ok" } else { "err" };
+    let outcome = if result.is_ok() { "ok" } else { "err" };
 
-      histogram
-        .with_label_values(&[action, outcome])
-        .observe(seconds_since(&start));
-      result
-    })
+    histogram
+      .with_label_values(&[action, outcome])
+      .observe(seconds_since(&start));
+    result
   }
 
   pub fn time_sync<F, U, E>(&self, action: &str, f: F) -> Result<U, E>

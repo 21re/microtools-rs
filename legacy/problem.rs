@@ -1,5 +1,9 @@
+use actix;
+use actix_web;
 use log::error;
 use serde_derive::{Deserialize, Serialize};
+use serde_json;
+use std;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Problem {
@@ -77,16 +81,6 @@ impl std::fmt::Display for Problem {
 
 impl std::error::Error for Problem {}
 
-impl actix_web::ResponseError for Problem {
-  fn status_code(&self) -> actix_web::http::StatusCode {
-    actix_web::http::StatusCode::from_u16(self.code).unwrap()
-  }
-
-  fn error_response(&self) -> actix_web::HttpResponse {
-    actix_web::dev::HttpResponseBuilder::new(self.status_code()).json(&self)
-  }
-}
-
 impl From<std::env::VarError> for Problem {
   fn from(error: std::env::VarError) -> Problem {
     use std::env::VarError::*;
@@ -106,11 +100,11 @@ impl From<std::io::Error> for Problem {
   }
 }
 
-impl From<actix::MailboxError> for Problem {
-  fn from(error: actix::MailboxError) -> Self {
-    error!("Actix mailbox error: {}", error);
+impl<T> From<std::sync::PoisonError<T>> for Problem {
+  fn from(error: std::sync::PoisonError<T>) -> Problem {
+    error!("Sync poison: {}", error);
 
-    Problem::internal_server_error().with_details(format!("Actix mailbox error: {}", error))
+    Problem::internal_server_error().with_details(format!("Sync poison: {}", error))
   }
 }
 
@@ -122,6 +116,45 @@ impl From<std::time::SystemTimeError> for Problem {
   }
 }
 
+impl From<std::str::Utf8Error> for Problem {
+  fn from(error: std::str::Utf8Error) -> Problem {
+    error!("UTF-8 error: {}", error);
+
+    Problem::bad_request().with_details(format!("UTF-8 error: {}", error))
+  }
+}
+
+impl From<actix_web::error::Error> for Problem {
+  fn from(error: actix_web::Error) -> Problem {
+    error!("Actix: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Actix: {}", error))
+  }
+}
+
+impl actix_web::error::ResponseError for Problem {
+  fn error_response(&self) -> actix_web::HttpResponse {
+    actix_web::HttpResponse::build(
+      actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
+    )
+    .json(self)
+  }
+}
+
+impl actix_web::Responder for Problem {
+  type Item = actix_web::HttpResponse;
+  type Error = Problem;
+
+  fn respond_to<S: 'static>(self, _req: &actix_web::HttpRequest<S>) -> Result<actix_web::HttpResponse, Problem> {
+    Ok(
+      actix_web::HttpResponse::build(
+        actix_web::http::StatusCode::from_u16(self.code).unwrap_or(actix_web::http::StatusCode::INTERNAL_SERVER_ERROR),
+      )
+      .json(self),
+    )
+  }
+}
+
 impl From<actix_web::client::SendRequestError> for Problem {
   fn from(error: actix_web::client::SendRequestError) -> Problem {
     use actix_web::client::SendRequestError::*;
@@ -130,10 +163,9 @@ impl From<actix_web::client::SendRequestError> for Problem {
 
     match error {
       Timeout => Problem::internal_server_error().with_details("Request timeout"),
-      Connect(err) => Problem::internal_server_error().with_details(format!("HTTP connection error: {}", err)),
-      Response(err) => Problem::internal_server_error().with_details(format!("Invalid HTTP response: {}", err)),
-      Send(err) => Problem::from(err),
-      _ => Problem::internal_server_error().with_details(format!("HTTP client error: {}", error)),
+      Connector(err) => Problem::internal_server_error().with_details(format!("HTTP connection error: {}", err)),
+      ParseError(err) => Problem::internal_server_error().with_details(format!("Invalid HTTP response: {}", err)),
+      Io(err) => Problem::from(err),
     }
   }
 }
@@ -145,11 +177,49 @@ impl From<actix_web::error::PayloadError> for Problem {
   }
 }
 
-impl From<awc::error::JsonPayloadError> for Problem {
-  fn from(error: awc::error::JsonPayloadError) -> Self {
+impl From<actix_web::error::ReadlinesError> for Problem {
+  fn from(error: actix_web::error::ReadlinesError) -> Self {
+    use actix_web::error::ReadlinesError::*;
+
+    match error {
+      EncodingError => Problem::internal_server_error().with_details("Readline: Invalid encoding"),
+      PayloadError(error) => Problem::from(error),
+      LimitOverflow => Problem::internal_server_error().with_details("Readline: Limit exeeded"),
+      ContentTypeError(error) => Problem::from(error),
+    }
+  }
+}
+
+impl From<actix_web::error::ContentTypeError> for Problem {
+  fn from(error: actix_web::error::ContentTypeError) -> Self {
+    error!("Http content type: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Http content type: {}", error))
+  }
+}
+
+impl From<actix_web::error::JsonPayloadError> for Problem {
+  fn from(error: actix_web::error::JsonPayloadError) -> Self {
     error!("Http json type: {}", error);
 
     Problem::internal_server_error().with_details(format!("Http json payload: {}", error))
+  }
+}
+
+impl From<actix::MailboxError> for Problem {
+  fn from(error: actix::MailboxError) -> Self {
+    error!("Actix mailbox error: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Actix mailbox error: {}", error))
+  }
+}
+
+#[cfg(feature = "with-toml")]
+impl From<::toml::de::Error> for Problem {
+  fn from(error: ::toml::de::Error) -> Self {
+    error!("Toml: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Toml: {}", error))
   }
 }
 
@@ -161,11 +231,38 @@ impl From<serde_json::Error> for Problem {
   }
 }
 
+#[cfg(feature = "with-diesel")]
+impl From<::r2d2::Error> for Problem {
+  fn from(error: ::r2d2::Error) -> Self {
+    error!("R2D2: {}", error);
+
+    Problem::internal_server_error().with_details(format!("R2D2: {}", error))
+  }
+}
+
+#[cfg(feature = "with-diesel")]
+impl From<::diesel::result::Error> for Problem {
+  fn from(error: ::diesel::result::Error) -> Self {
+    error!("Diesel result: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Diesel result: {}", error))
+  }
+}
+
 #[cfg(feature = "with-reqwest")]
 impl From<::reqwest::Error> for Problem {
   fn from(error: ::reqwest::Error) -> Self {
     error!("Reqwest error: {}", error);
 
     Problem::internal_server_error().with_details(format!("Request result: {}", error))
+  }
+}
+
+#[cfg(feature = "with-config")]
+impl From<::config::ConfigError> for Problem {
+  fn from(error: ::config::ConfigError) -> Self {
+    error!("Config error: {}", error);
+
+    Problem::internal_server_error().with_details(format!("Config: {}", error))
   }
 }

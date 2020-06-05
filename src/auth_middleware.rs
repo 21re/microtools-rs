@@ -1,12 +1,16 @@
-use super::{business_result, AsyncBusinessResult, BusinessResult, Problem};
+use super::{AsyncBusinessResult, BusinessResult, Problem};
 use crate::subject::Subject;
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use actix_web::http::header::{HeaderMap, HeaderValue};
-use actix_web::middleware::{Middleware, Started};
 use actix_web::FromRequest;
-use actix_web::{HttpRequest, HttpResponse, Result};
+use actix_web::{
+  dev::{MessageBody, Payload, Service, ServiceRequest, ServiceResponse, Transform},
+  HttpMessage, HttpRequest, HttpResponse, Result,
+};
+use futures::future::{err, ok, Future, Ready};
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::task::{Context, Poll};
 
 #[derive(Clone, Debug)]
 pub struct AuthContext {
@@ -17,16 +21,17 @@ pub struct AuthContext {
 }
 
 impl AuthContext {
-  pub fn require<R, F, U>(self, requirements: R, f: F) -> AsyncBusinessResult<U>
+  pub async fn require<R, F, FU, U>(self, requirements: R, f: F) -> BusinessResult<U>
   where
-    F: FnOnce() -> AsyncBusinessResult<U>,
+    F: FnOnce() -> FU,
+    FU: Future<Output = BusinessResult<U>>,
     R: FnOnce(&AuthContext) -> bool,
     U: 'static,
   {
     if requirements(&self) {
-      f()
+      f().await
     } else {
-      business_result::failure(Problem::forbidden())
+      Err(Problem::forbidden())
     }
   }
 }
@@ -38,21 +43,22 @@ pub fn admin_scope(auth_context: &AuthContext) -> bool {
   }
 }
 
-impl<S> FromRequest<S> for AuthContext {
+impl FromRequest for AuthContext {
   type Config = ();
-  type Result = BusinessResult<AuthContext>;
+  type Error = Problem;
+  type Future = Ready<Result<AuthContext, Problem>>;
 
-  fn from_request(req: &HttpRequest<S>, _cfg: &Self::Config) -> Self::Result {
+  fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
     match req.extensions().get::<AuthContext>() {
-      Some(auth_context) => Ok(auth_context.to_owned()),
-      None => Err(Problem::unauthorized()),
+      Some(auth_context) => ok(auth_context.to_owned()),
+      None => err(Problem::unauthorized()),
     }
   }
 }
 
-static SUBJECT_HEADER_NAME: &str = "X-Auth-Sub";
-static TOKEN_HEADER_NAME: &str = "X-Auth-Token";
-static ORGANIZATION_HEADER_NAME: &str = "X-Auth-Org";
+static SUBJECT_HEADER_NAME: &str = "x-auth-sub";
+static TOKEN_HEADER_NAME: &str = "x-auth-token";
+static ORGANIZATION_HEADER_NAME: &str = "x-auth-org";
 static SCOPES_HEADER_PREFIX: &str = "x-auth-scopes-";
 
 pub fn admin_scoped_action<F>(req: &HttpRequest, f: F) -> Result<HttpResponse>
@@ -94,8 +100,6 @@ where
   }
 }
 
-pub struct AuthMiddleware {}
-
 fn extract_scopes_from_headers(headers: &HeaderMap) -> BTreeMap<String, Vec<String>> {
   let mut scopes: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
@@ -126,8 +130,50 @@ fn extract_organization(maybe_organization: Option<&HeaderValue>) -> Option<Stri
   }
 }
 
-impl<S> Middleware<S> for AuthMiddleware {
-  fn start(&self, req: &HttpRequest<S>) -> Result<Started> {
+pub struct AuthMiddlewareFactory();
+
+impl<S, B> Transform<S> for AuthMiddlewareFactory
+where
+  S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
+  B: MessageBody,
+{
+  type Request = ServiceRequest;
+  type Response = ServiceResponse<B>;
+  type Error = Problem;
+  type InitError = ();
+  type Transform = AuthMiddleware<S>;
+  type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+  fn new_transform(&self, service: S) -> Self::Future {
+    ok(AuthMiddleware { service })
+  }
+}
+
+impl Default for AuthMiddlewareFactory {
+  fn default() -> AuthMiddlewareFactory {
+    AuthMiddlewareFactory()
+  }
+}
+
+pub struct AuthMiddleware<S> {
+  service: S,
+}
+
+impl<S, B> Service for AuthMiddleware<S>
+where
+  S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
+  B: MessageBody,
+{
+  type Request = ServiceRequest;
+  type Response = ServiceResponse<B>;
+  type Error = Problem;
+  type Future = AsyncBusinessResult<Self::Response>;
+
+  fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+    self.service.poll_ready(cx)
+  }
+
+  fn call(&mut self, req: ServiceRequest) -> Self::Future {
     let maybe_subject: Option<&HeaderValue> = req.headers().get(SUBJECT_HEADER_NAME);
     let maybe_token: Option<&HeaderValue> = req.headers().get(TOKEN_HEADER_NAME);
     let maybe_organization: Option<&HeaderValue> = req.headers().get(ORGANIZATION_HEADER_NAME);
@@ -135,29 +181,31 @@ impl<S> Middleware<S> for AuthMiddleware {
     if let (Some(subject), Some(token)) = (maybe_subject, maybe_token) {
       let scopes: BTreeMap<String, Vec<String>> = extract_scopes_from_headers(req.headers());
 
-      if let (Ok(subject), Ok(token)) = (subject.to_str(), token.to_str()) {
-        req.extensions_mut().insert(AuthContext {
-          subject: Subject::from_str(subject)?,
-          token: token.to_string(),
-          organization: extract_organization(maybe_organization),
-          scopes,
-        });
+      if let (Ok(subject_str), Ok(token)) = (subject.to_str(), token.to_str()) {
+        if let Ok(subject) = Subject::from_str(subject_str) {
+          req.extensions_mut().insert(AuthContext {
+            subject,
+            token: token.to_string(),
+            organization: extract_organization(maybe_organization),
+            scopes,
+          });
+        }
       }
     }
 
-    Ok(Started::Done)
-  }
-}
+    let fut = self.service.call(req);
 
-impl Default for AuthMiddleware {
-  fn default() -> AuthMiddleware {
-    AuthMiddleware {}
+    Box::pin(async move {
+      let res = fut.await?;
+      Ok(res)
+    })
   }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+  use actix_web::http::header::HeaderName;
   use spectral::prelude::*;
 
   #[test]
@@ -177,9 +225,9 @@ mod tests {
   #[test]
   fn extract_scopes_is_successful() {
     let mut headers = HeaderMap::new();
-    headers.append("X-Auth-Scopes-Kuci", "fkbr".parse().unwrap());
-    headers.append("X-Auth-Scopes-Kuci", "sxoe".parse().unwrap());
-    headers.append("X-Auth-Scopes-Sxoe", "kuci".parse().unwrap());
+    headers.append(HeaderName::from_static("x-auth-scopes-kuci"), "sxoe".parse().unwrap());
+    headers.append(HeaderName::from_static("x-auth-scopes-kuci"), "fkbr".parse().unwrap());
+    headers.append(HeaderName::from_static("x-auth-scopes-sxoe"), "kuci".parse().unwrap());
 
     let scopes = extract_scopes_from_headers(&headers);
 
