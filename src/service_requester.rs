@@ -9,7 +9,7 @@ use actix_web::http::{Method, StatusCode, Uri};
 use awc::SendClientRequest;
 use bytes::Bytes;
 use serde::Serialize;
-use std::convert::TryInto;
+use std::{convert::TryInto, time::Duration};
 use url::form_urlencoded::byte_serialize;
 
 pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
@@ -114,7 +114,8 @@ impl ServiceRequester {
       .apply_body(
         client
           .request(method, url.try_into().chain_problem("Invalid uri")?)
-          .header("Authorization", format!("Bearer {}", token.raw)),
+          .header("Authorization", format!("Bearer {}", token.raw))
+          .timeout(Duration::from_secs(60)),
       )
       .expect_success_with_error(self.error_handler)
       .await
@@ -131,6 +132,7 @@ impl ServiceRequester {
     client
       .request(method, url.try_into().chain_problem("Invalid uri")?)
       .header("Authorization", format!("Bearer {}", token.raw))
+      .timeout(Duration::from_secs(60))
       .send()
       .expect_success_with_error(self.error_handler)
       .await
