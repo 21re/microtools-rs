@@ -6,7 +6,7 @@ use crate::{
 use actix::{Actor, Addr};
 use actix_web::client::{Client, ClientRequest, PayloadError};
 use actix_web::http::{Method, StatusCode, Uri};
-use awc::SendClientRequest;
+use awc::{Connector, SendClientRequest};
 use bytes::Bytes;
 use serde::Serialize;
 use std::{convert::TryInto, time::Duration};
@@ -107,7 +107,7 @@ impl ServiceRequester {
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
-    let client = Client::default();
+    let client = Client::build().disable_redirects().connector(Connector::new().timeout(Duration::from_secs(20)).finish()).finish();
     let token = get_token(&self.token_creator).await?;
 
     body
@@ -126,7 +126,7 @@ impl ServiceRequester {
     U: TryInto<Uri>,
     O: FromClientResponse<O> + 'static,
   {
-    let client = Client::default();
+    let client = Client::build().disable_redirects().connector(Connector::new().timeout(Duration::from_secs(20)).finish()).finish();
     let token = get_token(&self.token_creator).await?;
 
     client
