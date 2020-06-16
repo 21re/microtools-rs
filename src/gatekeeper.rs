@@ -2,7 +2,7 @@ use crate::business_result::BusinessResult;
 use crate::problem::Problem;
 use crate::ws_try::SendClientRequestExt;
 use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFuture};
-use actix_web::client::Client;
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -72,7 +72,7 @@ impl Handler<GetToken> for TokenCreator {
           .client
           .post("http://localhost:12345/v1/tokens")
           .timeout(Duration::from_secs(30))
-          .send_json(&self.claims)
+          .json(&self.claims)
           .expect_success::<Token>();
 
         ActorResponse::r#async(token_response.into_actor(self).map(|maybe_token, actor, _| {

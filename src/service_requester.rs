@@ -1,15 +1,13 @@
 use crate::{
   gatekeeper::{get_token, TokenCreator},
   ws_try::{default_error_handler, FromClientResponse, SendClientRequestExt},
-  BusinessResult, BusinessResultExt, Problem,
+  BusinessResult, Problem,
 };
 use actix::{Actor, Addr};
-use actix_web::client::{Client, ClientRequest, PayloadError};
-use actix_web::http::{Method, StatusCode, Uri};
-use awc::{Connector, SendClientRequest};
 use bytes::Bytes;
+use reqwest::{redirect::Policy, Client, IntoUrl, Method, RequestBuilder, StatusCode};
 use serde::Serialize;
-use std::{convert::TryInto, time::Duration};
+use std::time::Duration;
 use url::form_urlencoded::byte_serialize;
 
 pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
@@ -17,15 +15,15 @@ pub fn encode_url_component<S: AsRef<[u8]>>(value: S) -> String {
 }
 
 pub trait IntoClientRequest {
-  fn apply_body(self, request: ClientRequest) -> SendClientRequest;
+  fn apply_body(self, request: RequestBuilder) -> RequestBuilder;
 }
 
 impl<S> IntoClientRequest for S
 where
   S: Serialize,
 {
-  fn apply_body(self, request: ClientRequest) -> SendClientRequest {
-    request.send_json(&self)
+  fn apply_body(self, request: RequestBuilder) -> RequestBuilder {
+    request.json(&self)
   }
 }
 
@@ -33,21 +31,25 @@ where
 pub struct ServiceRequester {
   client: Client,
   token_creator: Addr<TokenCreator>,
-  error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, PayloadError>) -> Problem + Sync),
+  error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, reqwest::Error>) -> Problem + Sync),
 }
 
 impl ServiceRequester {
-  pub fn with_service_auth(service_name: &str, scopes: &[(&str, &[&str])]) -> ServiceRequester {
-    ServiceRequester {
-      client: Client::build().disable_redirects().connector(Connector::new().timeout(Duration::from_secs(20)).finish()).finish(),
+  pub fn with_service_auth(service_name: &str, scopes: &[(&str, &[&str])]) -> BusinessResult<Self> {
+    Ok(ServiceRequester {
+      client: Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .timeout(Duration::from_secs(60))
+        .redirect(Policy::none())
+        .build()?,
       token_creator: TokenCreator::for_service(service_name, scopes).start(),
       error_handler: &default_error_handler,
-    }
+    })
   }
 
   pub fn with_error_handler(
     self,
-    error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, PayloadError>) -> Problem + Sync),
+    error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, reqwest::Error>) -> Problem + Sync),
   ) -> Self {
     ServiceRequester {
       client: self.client,
@@ -59,7 +61,7 @@ impl ServiceRequester {
   #[inline]
   pub async fn get<U, O>(&self, url: U) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     O: FromClientResponse<O> + 'static,
   {
     self.without_body(Method::GET, url).await
@@ -68,7 +70,7 @@ impl ServiceRequester {
   #[inline]
   pub async fn post<U, I, O>(&self, url: U, body: I) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
@@ -78,7 +80,7 @@ impl ServiceRequester {
   #[inline]
   pub async fn patch<U, I, O>(&self, url: U, body: I) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
@@ -88,7 +90,7 @@ impl ServiceRequester {
   #[inline]
   pub async fn put<U, I, O>(&self, url: U, body: I) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
@@ -98,7 +100,7 @@ impl ServiceRequester {
   #[inline]
   pub async fn delete<U, O>(&self, url: U) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     O: FromClientResponse<O> + 'static,
   {
     self.without_body(Method::DELETE, url).await
@@ -106,7 +108,7 @@ impl ServiceRequester {
 
   pub async fn with_body<U, I, O>(&self, method: Method, url: U, body: I) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
@@ -114,10 +116,10 @@ impl ServiceRequester {
 
     body
       .apply_body(
-        self.client
-          .request(method, url.try_into().chain_problem("Invalid uri")?)
-          .header("Authorization", format!("Bearer {}", token.raw))
-          .timeout(Duration::from_secs(60)),
+        self
+          .client
+          .request(method, url)
+          .header("Authorization", format!("Bearer {}", token.raw)),
       )
       .expect_success_with_error(self.error_handler)
       .await
@@ -125,16 +127,15 @@ impl ServiceRequester {
 
   pub async fn without_body<U, O>(&self, method: Method, url: U) -> BusinessResult<O>
   where
-    U: TryInto<Uri>,
+    U: IntoUrl,
     O: FromClientResponse<O> + 'static,
   {
     let token = get_token(&self.token_creator).await?;
 
-    self.client
-      .request(method, url.try_into().chain_problem("Invalid uri")?)
+    self
+      .client
+      .request(method, url)
       .header("Authorization", format!("Bearer {}", token.raw))
-      .timeout(Duration::from_secs(60))
-      .send()
       .expect_success_with_error(self.error_handler)
       .await
   }

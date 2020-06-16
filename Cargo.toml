@@ -12,6 +12,7 @@ serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"
 serde_json = "1.0"
 futures = "0.3"
+
 toml = { version = "0.4", optional = true }
 log = "0.4"
 bytes = "0.5"
@@ -26,7 +27,7 @@ slog-scope = { version = "4.3", optional = true }
 r2d2 = { version = "0.8", optional = true }
 diesel = { version = "1.3", optional = true }
 url = { version = "2" }
-reqwest = { version = "0.10", optional = true }
+reqwest = { version = "0.10", features = ["json", "stream"] }
 config = { version = "0.9", optional = true }
 
 [dev-dependencies]
@@ -36,5 +37,4 @@ spectral = "0.6"
 with-toml = ["toml"]
 with-slog = ["slog", "slog-envlogger", "slog-async", "slog-json", "slog-stdlog", "slog-scope", "chrono"]
 with-diesel = ["r2d2", "diesel"]
-with-reqwest = ["reqwest"]
 with-config = ["config"]

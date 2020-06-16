@@ -161,7 +161,6 @@ impl From<serde_json::Error> for Problem {
   }
 }
 
-#[cfg(feature = "with-reqwest")]
 impl From<::reqwest::Error> for Problem {
   fn from(error: ::reqwest::Error) -> Self {
     error!("Reqwest error: {}", error);
