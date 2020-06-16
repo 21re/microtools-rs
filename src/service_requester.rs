@@ -31,6 +31,7 @@ where
 
 #[derive(Clone)]
 pub struct ServiceRequester {
+  client: Client,
   token_creator: Addr<TokenCreator>,
   error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, PayloadError>) -> Problem + Sync),
 }
@@ -38,6 +39,7 @@ pub struct ServiceRequester {
 impl ServiceRequester {
   pub fn with_service_auth(service_name: &str, scopes: &[(&str, &[&str])]) -> ServiceRequester {
     ServiceRequester {
+      client: Client::build().disable_redirects().connector(Connector::new().timeout(Duration::from_secs(20)).finish()).finish(),
       token_creator: TokenCreator::for_service(service_name, scopes).start(),
       error_handler: &default_error_handler,
     }
@@ -48,6 +50,7 @@ impl ServiceRequester {
     error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, PayloadError>) -> Problem + Sync),
   ) -> Self {
     ServiceRequester {
+      client: self.client,
       token_creator: self.token_creator,
       error_handler,
     }
@@ -107,12 +110,11 @@ impl ServiceRequester {
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
-    let client = Client::build().disable_redirects().connector(Connector::new().timeout(Duration::from_secs(20)).finish()).finish();
     let token = get_token(&self.token_creator).await?;
 
     body
       .apply_body(
-        client
+        self.client
           .request(method, url.try_into().chain_problem("Invalid uri")?)
           .header("Authorization", format!("Bearer {}", token.raw))
           .timeout(Duration::from_secs(60)),
@@ -126,10 +128,9 @@ impl ServiceRequester {
     U: TryInto<Uri>,
     O: FromClientResponse<O> + 'static,
   {
-    let client = Client::build().disable_redirects().connector(Connector::new().timeout(Duration::from_secs(20)).finish()).finish();
     let token = get_token(&self.token_creator).await?;
 
-    client
+    self.client
       .request(method, url.try_into().chain_problem("Invalid uri")?)
       .header("Authorization", format!("Bearer {}", token.raw))
       .timeout(Duration::from_secs(60))
