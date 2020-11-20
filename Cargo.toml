@@ -1,7 +1,7 @@
 [package]
 name = "microtools"
 version = "0.1.0"
-authors = ["Bodo Junglas <junglas@objectcode.de>"]
+authors = ["Bodo Junglas <junglas@objectcode.de>", "Ihor Mordashev <ihor.mordashev@21re.de"]
 edition = "2018"
 
 [dependencies]
