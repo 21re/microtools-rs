@@ -18,8 +18,8 @@ impl Status {
   }
 }
 
-pub fn status_resource<V: ToString, S: 'static>(version: Option<V>) -> impl FnOnce(&mut Resource<S>) {
+pub fn status_resource<V: ToString, S: 'static>(version: Option<V>) -> Resource {
   let status = Status::new(version);
 
-  web::resource("/status").route(web::get().to(move || HttpResponse::Ok().json(&status)))
+  web::resource("/status").route(web::get().to(move || status.status()))
 }
