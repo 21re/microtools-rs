@@ -1,6 +1,4 @@
-use actix_web::dev::Resource;
-use actix_web::http::Method;
-use actix_web::HttpResponse;
+use actix_web::{web, HttpResponse, Resource};
 use serde_derive::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -20,8 +18,8 @@ impl Status {
   }
 }
 
-pub fn status_resource<V: ToString, S: 'static>(version: Option<V>) -> impl FnOnce(&mut Resource<S>) {
+pub fn status_resource<V: ToString>(version: Option<V>) -> Resource {
   let status = Status::new(version);
 
-  |r: &mut Resource<S>| r.method(Method::GET).f(move |_| status.status())
+  web::resource("/status").route(web::get().to(move || status.status()))
 }

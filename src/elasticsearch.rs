@@ -1,9 +1,9 @@
 use super::encode_url_component;
 use super::serde_field_value;
 use super::{IntoClientRequest, Problem};
-use actix_web::client::{ClientRequest, ClientRequestBuilder};
 use bytes::Bytes;
 use futures::stream;
+use reqwest::{header, Body, RequestBuilder};
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
@@ -376,16 +376,15 @@ pub struct BulkActions<B, T>(pub B)
 where
   B: IntoIterator<Item = BulkAction<T>>;
 
-impl<B, T> IntoClientRequest for BulkActions<B, T>
+impl<B, T, I> IntoClientRequest for BulkActions<B, T>
 where
-  B: IntoIterator<Item = BulkAction<T>> + 'static,
+  B: IntoIterator<Item = BulkAction<T>, IntoIter = I> + 'static,
+  I: Iterator<Item = BulkAction<T>> + Send + Sync + 'static,
   T: serde::Serialize,
 {
-  fn apply_body(self, builder: &mut ClientRequestBuilder) -> Result<ClientRequest, Problem> {
-    builder
-      .content_type("application/x-ndjson")
-      .streaming(stream::iter_result(self.0.into_iter().map(|a| a.to_bytes())))
-      .map_err(Problem::from)
+  fn apply_body(self, request: RequestBuilder) -> RequestBuilder {
+    let body = Body::wrap_stream(stream::iter(self.0.into_iter().map(|a| a.to_bytes())));
+    request.header(header::CONTENT_TYPE, "application/x-ndjson").body(body)
   }
 }
 

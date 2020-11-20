@@ -1,10 +1,8 @@
 use crate::business_result::BusinessResult;
 use crate::problem::Problem;
-use crate::ws_try;
+use crate::ws_try::SendClientRequestExt;
 use actix::{Actor, ActorFuture, ActorResponse, Context, Handler, Message, WrapFuture};
-use actix_web::client;
-use futures::Future;
-use log::error;
+use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -28,10 +26,11 @@ struct GetToken;
 pub struct TokenCreator {
   claims: Map<String, Value>,
   current: Option<Token>,
+  client: Client,
 }
 
-pub fn get_token(actor: &actix::Addr<TokenCreator>) -> impl Future<Item = Token, Error = Problem> {
-  actor.send(GetToken).flatten()
+pub async fn get_token(actor: &actix::Addr<TokenCreator>) -> BusinessResult<Token> {
+  actor.send(GetToken).await?
 }
 
 impl TokenCreator {
@@ -43,13 +42,17 @@ impl TokenCreator {
     let mut scopes_map: Map<String, Value> = Map::new();
 
     for (key, values_raw) in scopes {
-      let values = values_raw.iter().map(|&v| Value::String(v.to_string())).collect();
+      let values = values_raw.iter().map(|&v| Value::String((*v).to_string())).collect();
       scopes_map.insert((*key).to_string(), Value::Array(values));
     }
 
     claims.insert("scopes".to_string(), Value::Object(scopes_map));
 
-    TokenCreator { claims, current: None }
+    TokenCreator {
+      claims,
+      current: None,
+      client: Client::new(),
+    }
   }
 }
 
@@ -65,23 +68,19 @@ impl Handler<GetToken> for TokenCreator {
     match self.current {
       Some(ref token) if token.expires > unixtime => ActorResponse::reply(Ok(token.clone())),
       _ => {
-        let token_request = match client::post("http://localhost:12345/v1/tokens")
+        let token_response = self
+          .client
+          .post("http://localhost:12345/v1/tokens")
           .timeout(Duration::from_secs(30))
           .json(&self.claims)
-        {
-          Ok(request) => request,
-          Err(error) => {
-            error!("Token request failed: {}", error);
-            return ActorResponse::reply(Err(Problem::from(error)));
-          }
-        };
+          .expect_success::<Token>();
 
-        ActorResponse::r#async(ws_try::expect_success(token_request).into_actor(self).map(
-          |token: Token, actor: &mut TokenCreator, _| {
+        ActorResponse::r#async(token_response.into_actor(self).map(|maybe_token, actor, _| {
+          if let Ok(ref token) = maybe_token {
             actor.current = Some(token.clone());
-            token
-          },
-        ))
+          }
+          maybe_token
+        }))
       }
     }
   }
