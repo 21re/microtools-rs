@@ -44,7 +44,7 @@ impl TokenCreator {
 
     for (key, values_raw) in scopes {
       let values = values_raw.iter().map(|&v| Value::String(v.to_string())).collect();
-      scopes_map.insert(key.to_string(), Value::Array(values));
+      scopes_map.insert((*key).to_string(), Value::Array(values));
     }
 
     claims.insert("scopes".to_string(), Value::Object(scopes_map));
