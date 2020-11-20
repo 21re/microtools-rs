@@ -217,6 +217,8 @@ pub enum SortOrder {
 #[derive(Clone, Debug, Deserialize)]
 pub struct QueryResult<I, T> {
   pub hits: QueryHits<I, T>,
+  #[serde(rename = "_scroll_id")]
+  pub scroll_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
