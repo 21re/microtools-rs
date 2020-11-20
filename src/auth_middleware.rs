@@ -32,10 +32,7 @@ impl AuthContext {
 }
 
 pub fn admin_scope(auth_context: &AuthContext) -> bool {
-  match auth_context.subject {
-    Subject::Admin(_) => true,
-    _ => false,
-  }
+  matches!(auth_context.subject, Subject::Admin(_))
 }
 
 impl<S> FromRequest<S> for AuthContext {
