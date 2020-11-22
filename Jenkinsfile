@@ -8,6 +8,8 @@ reportSlack {
 
     rustBuild([version: gen.VERSION])
 
+	sh("env && echo 'TEST'")
+	
     if(gen.deploy) {
       githubRelease([version: gen.VERSION])
     }
