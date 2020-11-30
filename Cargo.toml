@@ -1,12 +1,12 @@
 [package]
 name = "microtools"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Bodo Junglas <junglas@objectcode.de>", "Ihor Mordashev <ihor.mordashev@21re.de"]
 edition = "2018"
 
 [dependencies]
-actix = "0.9"
-actix-web = "3.2"
+actix = "0.10"
+actix-web = "3.3"
 awc = "1"
 serde = { version = "1.0", features = ["rc"] }
 serde_derive = "1.0"
