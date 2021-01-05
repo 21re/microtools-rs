@@ -3,6 +3,7 @@ use bytes::Bytes;
 use futures::{future, FutureExt, StreamExt};
 use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
+use std::str;
 
 // const JSON_RESPONSE_LIMIT: usize = 100 * 1024 * 1024;
 
@@ -50,8 +51,17 @@ where
 
 pub const DEFAULT_CLIENT_ERROR_HANDLER: DefaultClientErrorHandler = DefaultClientErrorHandler();
 
-pub fn default_error_handler(status: StatusCode, _: Result<Bytes, reqwest::Error>) -> Problem {
-  Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+pub fn default_error_handler(status: StatusCode, maybe_body: Result<Bytes, reqwest::Error>) -> Problem {
+  match maybe_body {
+    Ok(body) => match serde_json::from_slice::<Problem>(&body) {
+      Ok(server_problem) => Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+        .with_details(format!("{}", server_problem)),
+      _ => Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+        .with_details(str::from_utf8(&body).unwrap_or("")),
+    },
+    Err(err) => Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+      .with_details(format!("{}", err)),
+  }
 }
 
 pub trait SendClientRequestExt: Sized {
