@@ -223,8 +223,14 @@ pub struct QueryResult<I, T> {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct QueryHits<I, T> {
-  pub total: u64,
+  pub total: QueryHitsTotal,
   pub hits: Vec<Doc<I, T>>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct QueryHitsTotal {
+  pub total: u64,
+  pub relation: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
