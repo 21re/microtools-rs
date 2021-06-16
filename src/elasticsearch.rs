@@ -229,7 +229,7 @@ pub struct QueryHits<I, T> {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct QueryHitsTotal {
-  pub total: u64,
+  pub value: u64,
   pub relation: String,
 }
 
