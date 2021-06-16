@@ -414,7 +414,7 @@ impl ElasticsearchUrlBuilder {
   }
 
   pub fn mapping(&self) -> String {
-    format!("{}/_mapping/_doc", self.index())
+    format!("{}/_mapping", self.index())
   }
 
   pub fn search(&self) -> String {
