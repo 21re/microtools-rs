@@ -1,7 +1,4 @@
-use chrono;
 use slog::{self, slog_o, Drain};
-use slog_async;
-use slog_json;
 use std::env;
 
 pub fn default_json_drain() -> slog_async::Async {

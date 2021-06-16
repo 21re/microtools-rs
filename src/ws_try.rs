@@ -1,168 +1,99 @@
-use crate::business_result::AsyncBusinessResult;
-use crate::problem::Problem;
-use crate::types::{Done, Lines};
-use actix_web::client;
-use actix_web::HttpMessage;
-use futures::{future, Async, Future, Poll, Stream};
-use log::error;
+use crate::{types::Done, AsyncBusinessResult, Problem};
+use bytes::Bytes;
+use futures::{future, FutureExt, StreamExt};
+use reqwest::{RequestBuilder, Response, StatusCode};
 use serde::de::DeserializeOwned;
-use std::time::Duration;
+use std::str;
 
-const JSON_RESPONSE_LIMIT: usize = 100 * 1024 * 1024;
+// const JSON_RESPONSE_LIMIT: usize = 100 * 1024 * 1024;
 
-pub trait IntoClientRequest {
-  fn into_request(self) -> Result<client::ClientRequest, Problem>;
+pub trait FromClientResponse<T> {
+  fn from_response(response: Response) -> AsyncBusinessResult<T>;
 }
 
-pub trait FromClientResponse {
-  type Result;
-  type FutureResult: Future<Item = Self::Result, Error = Problem>;
-
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult;
-}
-
-pub enum WSTry<F> {
-  MayBeSuccess(F),
-  Failure(Problem),
-  FutureFailure(Box<dyn Future<Item = Problem, Error = Problem>>),
-}
-
-impl<T, F> Future for WSTry<F>
-where
-  F: Future<Item = T, Error = Problem>,
-{
-  type Item = T;
-  type Error = Problem;
-
-  fn poll(&mut self) -> Poll<T, Problem> {
-    match self {
-      WSTry::MayBeSuccess(f) => f.poll(),
-      WSTry::Failure(problem) => Err(problem.clone()),
-      WSTry::FutureFailure(future_problem) => match future_problem.poll() {
-        Ok(Async::NotReady) => Ok(Async::NotReady),
-        Ok(Async::Ready(problem)) => Err(problem),
-        Err(problem) => Err(problem),
-      },
-    }
+impl FromClientResponse<Done> for Done {
+  fn from_response(response: Response) -> AsyncBusinessResult<Done> {
+    Box::pin(
+      response
+        .bytes_stream()
+        .for_each(|_| future::ready(()))
+        .map(|_| Ok(Done)),
+    )
   }
 }
 
-pub fn r#try<R>(request: R) -> impl Future<Item = client::ClientResponse, Error = Problem>
-where
-  R: IntoClientRequest,
-{
-  let client_request = match request.into_request() {
-    Ok(request) => request,
-    Err(problem) => return WSTry::Failure(problem),
-  };
-  let url = client_request.uri().to_string();
-  let method = client_request.method().to_string();
-
-  WSTry::MayBeSuccess(
-    client_request
-      .send()
-      .timeout(Duration::from_secs(60))
-      .conn_timeout(Duration::from_secs(20))
-      .wait_timeout(Duration::from_secs(60))
-      .map_err(move |err| {
-        error!("Request {} {} failed: {}", method, url, err);
-        Problem::from(err)
-      }),
-  )
-}
-
-pub fn expect_success<R, F, T>(request: R) -> impl Future<Item = T, Error = Problem>
-where
-  R: IntoClientRequest,
-  T: FromClientResponse<Result = T, FutureResult = F>,
-  F: Future<Item = T, Error = Problem>,
-{
-  r#try(request).and_then(move |resp| {
-    if resp.status().is_success() {
-      WSTry::MayBeSuccess(T::from_response(resp))
-    } else {
-      WSTry::Failure(Problem::for_status(
-        resp.status().as_u16(),
-        format!("Service request failed: {}", resp.status()),
-      ))
-    }
-  })
-}
-
-pub fn expect_success_with_error<R, F, T, E>(request: R, error_handler: E) -> impl Future<Item = T, Error = Problem>
-where
-  R: IntoClientRequest,
-  T: FromClientResponse<Result = T, FutureResult = F>,
-  F: Future<Item = T, Error = Problem>,
-  E: Fn(client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>>,
-{
-  r#try(request).and_then(move |resp| {
-    if resp.status().is_success() {
-      WSTry::MayBeSuccess(T::from_response(resp))
-    } else {
-      WSTry::FutureFailure(error_handler(resp))
-    }
-  })
-}
-
-#[allow(clippy::needless_pass_by_value)]
-pub fn default_error_handler(response: client::ClientResponse) -> Box<dyn Future<Item = Problem, Error = Problem>> {
-  Box::new(future::ok(Problem::for_status(
-    response.status().as_u16(),
-    format!("Service request failed: {}", response.status()),
-  )))
-}
-
-impl IntoClientRequest for client::ClientRequest {
-  fn into_request(self) -> Result<client::ClientRequest, Problem> {
-    Ok(self)
-  }
-}
-
-impl IntoClientRequest for client::ClientRequestBuilder {
-  fn into_request(mut self) -> Result<client::ClientRequest, Problem> {
-    self.finish().map_err(Problem::from)
-  }
-}
-
-impl<E> IntoClientRequest for Result<client::ClientRequest, E>
-where
-  E: Into<Problem>,
-{
-  fn into_request(self) -> Result<client::ClientRequest, Problem> {
-    self.map_err(E::into)
-  }
-}
-
-impl<T> FromClientResponse for T
+impl<T> FromClientResponse<T> for T
 where
   T: DeserializeOwned + 'static,
 {
-  type Result = T;
-  type FutureResult = AsyncBusinessResult<T>;
-
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult {
-    Box::new(response.json().limit(JSON_RESPONSE_LIMIT).map_err(Problem::from))
+  fn from_response(response: Response) -> AsyncBusinessResult<T> {
+    Box::pin(response.json().map(|r| r.map_err(Problem::from)))
   }
 }
 
-impl FromClientResponse for Done {
-  type Result = Done;
-  type FutureResult = AsyncBusinessResult<Done>;
+pub trait ClientErrorHandler<T> {
+  fn handle_error(&self, response: Response) -> AsyncBusinessResult<T>;
+}
 
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult {
-    Box::new(response.payload().from_err().for_each(|_| Ok(())).map(|_| Done))
+pub struct DefaultClientErrorHandler();
+
+impl<T> ClientErrorHandler<T> for DefaultClientErrorHandler
+where
+  T: 'static,
+{
+  fn handle_error(&self, response: Response) -> AsyncBusinessResult<T> {
+    Box::pin(future::err(Problem::for_status(
+      response.status().as_u16(),
+      format!("Service request failed: {}", response.status()),
+    )))
   }
 }
 
-impl FromClientResponse for Lines {
-  type Result = Lines;
-  type FutureResult = AsyncBusinessResult<Lines>;
+pub const DEFAULT_CLIENT_ERROR_HANDLER: DefaultClientErrorHandler = DefaultClientErrorHandler();
 
-  fn from_response(response: client::ClientResponse) -> Self::FutureResult {
-    Box::new(response.readlines().collect().then(|result| match result {
-      Ok(lines) => Ok(Lines::new(lines)),
-      Err(error) => Err(Problem::from(error)),
+pub fn default_error_handler(status: StatusCode, maybe_body: Result<Bytes, reqwest::Error>) -> Problem {
+  match maybe_body {
+    Ok(body) => match serde_json::from_slice::<Problem>(&body) {
+      Ok(server_problem) => Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+        .with_details(format!("{}", server_problem)),
+      _ => Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+        .with_details(str::from_utf8(&body).unwrap_or("")),
+    },
+    Err(err) => Problem::for_status(status.as_u16(), format!("Service request failed: {}", status))
+      .with_details(format!("{}", err)),
+  }
+}
+
+pub trait SendClientRequestExt: Sized {
+  fn expect_success<T>(self) -> AsyncBusinessResult<T>
+  where
+    T: FromClientResponse<T> + 'static,
+  {
+    self.expect_success_with_error(default_error_handler)
+  }
+
+  fn expect_success_with_error<T, E>(self, error_handler: E) -> AsyncBusinessResult<T>
+  where
+    T: FromClientResponse<T> + 'static,
+    E: Fn(StatusCode, Result<Bytes, reqwest::Error>) -> Problem + 'static;
+}
+
+impl SendClientRequestExt for RequestBuilder {
+  fn expect_success_with_error<T, E>(self, error_handler: E) -> AsyncBusinessResult<T>
+  where
+    T: FromClientResponse<T> + 'static,
+    E: Fn(StatusCode, Result<Bytes, reqwest::Error>) -> Problem + 'static,
+  {
+    Box::pin(self.send().then(move |maybe_resp| match maybe_resp {
+      Ok(resp) => {
+        let status = resp.status();
+        if status.is_success() {
+          T::from_response(resp)
+        } else {
+          Box::pin(resp.bytes().map(move |body| Err(error_handler(status, body))))
+        }
+      }
+      Err(err) => Box::pin(future::err(Problem::from(err))),
     }))
   }
 }
