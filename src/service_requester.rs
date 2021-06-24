@@ -36,10 +36,18 @@ pub struct ServiceRequester {
 
 impl ServiceRequester {
   pub fn with_service_auth(service_name: &str, scopes: &[(&str, &[&str])]) -> BusinessResult<Self> {
+    ServiceRequester::with_service_auth_with_timeout(service_name, scopes, 120)
+  }
+
+  pub fn with_service_auth_with_timeout(
+    service_name: &str,
+    scopes: &[(&str, &[&str])],
+    timeout_seconds: u16,
+  ) -> BusinessResult<Self> {
     Ok(ServiceRequester {
       client: Client::builder()
-        .connect_timeout(Duration::from_secs(20))
-        .timeout(Duration::from_secs(60))
+        .connect_timeout(Duration::from_secs(timeout_seconds as u64))
+        .timeout(Duration::from_secs(timeout_seconds as u64))
         .redirect(Policy::none())
         .build()?,
       token_creator: TokenCreator::for_service(service_name, scopes).start(),
