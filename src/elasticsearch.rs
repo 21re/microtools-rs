@@ -223,8 +223,14 @@ pub struct QueryResult<I, T> {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct QueryHits<I, T> {
-  pub total: u64,
+  pub total: QueryHitsTotal,
   pub hits: Vec<Doc<I, T>>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct QueryHitsTotal {
+  pub value: u64,
+  pub relation: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -408,7 +414,7 @@ impl ElasticsearchUrlBuilder {
   }
 
   pub fn mapping(&self) -> String {
-    format!("{}/_mapping/_doc", self.index())
+    format!("{}/_mapping", self.index())
   }
 
   pub fn search(&self) -> String {

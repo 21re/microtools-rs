@@ -85,7 +85,7 @@ fn test_build_url_mget() {
 fn test_build_url_mapping() {
   let url_builder = ElasticsearchUrlBuilder::new("http://server".to_string(), "INDEX_NAME".to_string());
 
-  assert_that(&url_builder.mapping()).is_equal_to("http://server/INDEX_NAME/_mapping/_doc".to_string());
+  assert_that(&url_builder.mapping()).is_equal_to("http://server/INDEX_NAME/_mapping".to_string());
 }
 
 #[test]
