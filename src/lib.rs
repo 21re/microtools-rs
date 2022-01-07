@@ -3,7 +3,6 @@ pub mod business_result;
 pub mod elasticsearch;
 #[cfg(test)]
 pub mod elasticsearch_test;
-pub mod gatekeeper;
 #[cfg(feature = "with-slog")]
 pub mod logging_slog;
 pub mod metrics;

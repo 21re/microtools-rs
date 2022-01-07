@@ -1,9 +1,7 @@
 use crate::{
-  gatekeeper::{get_token, TokenCreator},
   ws_try::{default_error_handler, FromClientResponse, SendClientRequestExt},
   BusinessResult, Problem,
 };
-use actix::{Actor, Addr};
 use bytes::Bytes;
 use reqwest::{redirect::Policy, Client, IntoUrl, Method, RequestBuilder, StatusCode};
 use serde::Serialize;
@@ -30,27 +28,23 @@ where
 #[derive(Clone)]
 pub struct ServiceRequester {
   client: Client,
-  token_creator: Addr<TokenCreator>,
+  service_name: &'static str,
   error_handler: &'static (dyn Fn(StatusCode, Result<Bytes, reqwest::Error>) -> Problem + Sync),
 }
 
 impl ServiceRequester {
-  pub fn with_service_auth(service_name: &str, scopes: &[(&str, &[&str])]) -> BusinessResult<Self> {
-    ServiceRequester::with_service_auth_with_timeout(service_name, scopes, 120)
+  pub fn with_service_auth(service_name: &'static str) -> BusinessResult<Self> {
+    ServiceRequester::with_service_auth_with_timeout(service_name, 120)
   }
 
-  pub fn with_service_auth_with_timeout(
-    service_name: &str,
-    scopes: &[(&str, &[&str])],
-    timeout_seconds: u16,
-  ) -> BusinessResult<Self> {
+  pub fn with_service_auth_with_timeout(service_name: &'static str, timeout_seconds: u16) -> BusinessResult<Self> {
     Ok(ServiceRequester {
       client: Client::builder()
         .connect_timeout(Duration::from_secs(timeout_seconds as u64))
         .timeout(Duration::from_secs(timeout_seconds as u64))
         .redirect(Policy::none())
         .build()?,
-      token_creator: TokenCreator::for_service(service_name, scopes).start(),
+      service_name,
       error_handler: &default_error_handler,
     })
   }
@@ -61,7 +55,7 @@ impl ServiceRequester {
   ) -> Self {
     ServiceRequester {
       client: self.client,
-      token_creator: self.token_creator,
+      service_name: self.service_name,
       error_handler,
     }
   }
@@ -120,14 +114,13 @@ impl ServiceRequester {
     I: IntoClientRequest,
     O: FromClientResponse<O> + 'static,
   {
-    let token = get_token(&self.token_creator).await?;
-
     body
       .apply_body(
         self
           .client
           .request(method, url)
-          .header("Authorization", format!("Bearer {}", token.raw)),
+          .header("X-Auth-Sub", format!("service/{}", self.service_name))
+          .header("X-Auth-Token", "internal-token"),
       )
       .expect_success_with_error(self.error_handler)
       .await
@@ -138,12 +131,11 @@ impl ServiceRequester {
     U: IntoUrl,
     O: FromClientResponse<O> + 'static,
   {
-    let token = get_token(&self.token_creator).await?;
-
     self
       .client
       .request(method, url)
-      .header("Authorization", format!("Bearer {}", token.raw))
+      .header("X-Auth-Sub", format!("service/{}", self.service_name))
+      .header("X-Auth-Token", "internal-token")
       .expect_success_with_error(self.error_handler)
       .await
   }
