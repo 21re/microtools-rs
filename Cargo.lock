@@ -1757,7 +1757,7 @@ dependencies = [
  "rand 0.6.5",
  "redox_syscall",
  "rustc_version 0.2.3",
- "smallvec 0.6.10",
+ "smallvec 0.6.14",
  "winapi 0.3.8",
 ]
 
@@ -1772,7 +1772,7 @@ dependencies = [
  "libc",
  "redox_syscall",
  "rustc_version 0.2.3",
- "smallvec 0.6.10",
+ "smallvec 0.6.14",
  "winapi 0.3.8",
 ]
 
@@ -2554,9 +2554,12 @@ dependencies = [
 
 [[package]]
 name = "smallvec"
-version = "0.6.10"
+version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab606a9c5e214920bb66c458cd7be8ef094f813f20fe77a54cc7dbfff220d4b7"
+checksum = "b97fcaeba89edba30f044a10c6a3cc39df9c3f17d7cd829dd1446cab35f890e0"
+dependencies = [
+ "maybe-uninit",
+]
 
 [[package]]
 name = "smallvec"
@@ -2976,7 +2979,7 @@ version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "141339a08b982d942be2ca06ff8b076563cbe223d1befd5450716790d44e2426"
 dependencies = [
- "smallvec 0.6.10",
+ "smallvec 0.6.14",
 ]
 
 [[package]]
