@@ -1,3 +1,5 @@
+#![crate_type = "lib"]
+
 pub mod auth_middleware;
 pub mod business_result;
 pub mod elasticsearch;

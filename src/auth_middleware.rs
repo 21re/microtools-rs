@@ -14,10 +14,10 @@ use std::task::{Context, Poll};
 
 #[derive(Clone, Debug)]
 pub struct AuthContext {
-  subject: Subject,
-  token: String,
-  organization: Option<String>,
-  scopes: BTreeMap<String, Vec<String>>,
+  pub subject: Subject,
+  pub token: String,
+  pub organization: Option<String>,
+  pub scopes: BTreeMap<String, Vec<String>>,
 }
 
 impl AuthContext {
@@ -41,9 +41,9 @@ pub fn admin_scope(auth_context: &AuthContext) -> bool {
 }
 
 impl FromRequest for AuthContext {
-  type Config = ();
   type Error = Problem;
   type Future = Ready<Result<AuthContext, Problem>>;
+  type Config = ();
 
   fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
     match req.extensions().get::<AuthContext>() {
@@ -127,6 +127,7 @@ fn extract_organization(maybe_organization: Option<&HeaderValue>) -> Option<Stri
   }
 }
 
+#[derive(Default)]
 pub struct AuthMiddlewareFactory();
 
 impl<S, B> Transform<S> for AuthMiddlewareFactory
@@ -143,12 +144,6 @@ where
 
   fn new_transform(&self, service: S) -> Self::Future {
     ok(AuthMiddleware { service })
-  }
-}
-
-impl Default for AuthMiddlewareFactory {
-  fn default() -> AuthMiddlewareFactory {
-    AuthMiddlewareFactory()
   }
 }
 

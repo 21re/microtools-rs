@@ -290,6 +290,7 @@ pub struct BulkResponseItem {
 }
 
 impl BulkResponseItem {
+  #[allow(clippy::all)]
   pub fn action_response(&self) -> Option<&BulkActionResponse> {
     self
       .index
