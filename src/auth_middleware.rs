@@ -41,9 +41,9 @@ pub fn admin_scope(auth_context: &AuthContext) -> bool {
 }
 
 impl FromRequest for AuthContext {
-  type Config = ();
   type Error = Problem;
   type Future = Ready<Result<AuthContext, Problem>>;
+  type Config = ();
 
   fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
     match req.extensions().get::<AuthContext>() {

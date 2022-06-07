@@ -1,6 +1,6 @@
 [package]
 name = "microtools"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Bodo Junglas <junglas@objectcode.de>", "Ihor Mordashev <ihor.mordashev@21re.de"]
 edition = "2018"
 
