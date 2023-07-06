@@ -30,7 +30,7 @@ diesel = { version = "2.1.0", optional = true }
 url = { version = "2.4.0" }
 reqwest = { version = "0.11.18", features = ["json", "stream"] }
 config = { version = "0.13.3", optional = true }
-openssl = "0.10.54"
+openssl = "0.10.55"
 
 [dev-dependencies]
 spectral = "0.6.0"

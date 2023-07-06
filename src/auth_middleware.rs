@@ -1,6 +1,6 @@
 use super::{AsyncBusinessResult, BusinessResult, Problem};
 use crate::subject::Subject;
-use actix_web::body::{MessageBody, BoxBody};
+use actix_web::body::BoxBody;
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use actix_web::http::header::{HeaderMap, HeaderValue};
 use actix_web::FromRequest;
@@ -130,12 +130,11 @@ fn extract_organization(maybe_organization: Option<&HeaderValue>) -> Option<Stri
 #[derive(Default)]
 pub struct AuthMiddlewareFactory();
 
-impl<S, B> Transform<S, B> for AuthMiddlewareFactory
+impl<S> Transform<S, ServiceRequest> for AuthMiddlewareFactory
 where
-  S: Service<ServiceRequest> + 'static,
-  B: MessageBody,
+  S: Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Problem> + 'static,
 {
-  type Response = ServiceResponse<B>;
+  type Response = ServiceResponse<BoxBody>;
   type Error = Problem;
   type InitError = ();
   type Transform = AuthMiddleware<S>;
@@ -152,19 +151,17 @@ pub struct AuthMiddleware<S> {
 
 impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
 where
-  S: Service<ServiceRequest> + 'static,
-  B: MessageBody<Error = Problem> + 'static,
-  ServiceResponse<dyn MessageBody<Error = Problem>>: 'static,
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
 {
   type Response = ServiceResponse<B>;
   type Error = Problem;
   type Future = AsyncBusinessResult<Self::Response>;
 
-  fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+  fn poll_ready(&self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
     self.service.poll_ready(cx)
   }
 
-  fn call(&mut self, req: ServiceRequest) -> Self::Future {
+  fn call(&self, req: ServiceRequest) -> Self::Future {
     let maybe_subject: Option<&HeaderValue> = req.headers().get(SUBJECT_HEADER_NAME);
     let maybe_token: Option<&HeaderValue> = req.headers().get(TOKEN_HEADER_NAME);
     let maybe_organization: Option<&HeaderValue> = req.headers().get(ORGANIZATION_HEADER_NAME);
