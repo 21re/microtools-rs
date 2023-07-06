@@ -1,4 +1,4 @@
-use actix_web::{HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
 
 #[derive(Clone, Debug)]
 pub struct Done;
@@ -7,4 +7,6 @@ impl Responder for Done {
   fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
     HttpResponse::NoContent().finish()
   }
+
+  type Body = BoxBody;
 }
