@@ -1,3 +1,5 @@
+use actix_web::HttpResponseBuilder;
+use awc::error::SendRequestError;
 use log::error;
 use serde_derive::{Deserialize, Serialize};
 
@@ -83,7 +85,7 @@ impl actix_web::ResponseError for Problem {
   }
 
   fn error_response(&self) -> actix_web::HttpResponse {
-    actix_web::dev::HttpResponseBuilder::new(self.status_code()).json(&self)
+    HttpResponseBuilder::new(self.status_code()).json(&self)
   }
 }
 
@@ -122,9 +124,9 @@ impl From<std::time::SystemTimeError> for Problem {
   }
 }
 
-impl From<actix_web::client::SendRequestError> for Problem {
-  fn from(error: actix_web::client::SendRequestError) -> Problem {
-    use actix_web::client::SendRequestError::*;
+impl From<SendRequestError> for Problem {
+  fn from(error: SendRequestError) -> Problem {
+    use SendRequestError::*;
 
     error!("Http client: {}", error);
 

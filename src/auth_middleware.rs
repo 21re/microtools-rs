@@ -1,10 +1,11 @@
 use super::{AsyncBusinessResult, BusinessResult, Problem};
 use crate::subject::Subject;
+use actix_web::body::{MessageBody, BoxBody};
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use actix_web::http::header::{HeaderMap, HeaderValue};
 use actix_web::FromRequest;
 use actix_web::{
-  dev::{MessageBody, Payload, Service, ServiceRequest, ServiceResponse, Transform},
+  dev::{Payload, Service, ServiceRequest, ServiceResponse, Transform},
   HttpMessage, HttpRequest, HttpResponse, Result,
 };
 use futures::future::{err, ok, Future, Ready};
@@ -43,7 +44,6 @@ pub fn admin_scope(auth_context: &AuthContext) -> bool {
 impl FromRequest for AuthContext {
   type Error = Problem;
   type Future = Ready<Result<AuthContext, Problem>>;
-  type Config = ();
 
   fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
     match req.extensions().get::<AuthContext>() {
@@ -130,12 +130,11 @@ fn extract_organization(maybe_organization: Option<&HeaderValue>) -> Option<Stri
 #[derive(Default)]
 pub struct AuthMiddlewareFactory();
 
-impl<S, B> Transform<S> for AuthMiddlewareFactory
+impl<S, B> Transform<S, B> for AuthMiddlewareFactory
 where
-  S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
+  S: Service<ServiceRequest> + 'static,
   B: MessageBody,
 {
-  type Request = ServiceRequest;
   type Response = ServiceResponse<B>;
   type Error = Problem;
   type InitError = ();
@@ -151,12 +150,12 @@ pub struct AuthMiddleware<S> {
   service: S,
 }
 
-impl<S, B> Service for AuthMiddleware<S>
+impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
 where
-  S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
-  B: MessageBody,
+  S: Service<ServiceRequest> + 'static,
+  B: MessageBody<Error = Problem> + 'static,
+  ServiceResponse<dyn MessageBody<Error = Problem>>: 'static,
 {
-  type Request = ServiceRequest;
   type Response = ServiceResponse<B>;
   type Error = Problem;
   type Future = AsyncBusinessResult<Self::Response>;
