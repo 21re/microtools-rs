@@ -4,7 +4,7 @@ use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
 pub struct Done;
 
 impl Responder for Done {
-  fn respond_to(self, req: &HttpRequest) -> HttpResponse<Self::Body> {
+  fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
     HttpResponse::NoContent().finish()
   }
 
