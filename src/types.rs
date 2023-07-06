@@ -1,4 +1,4 @@
-use actix_web::{HttpRequest, HttpResponse, Responder, body::BoxBody};
+use actix_web::{body::BoxBody, HttpRequest, HttpResponse, Responder};
 
 #[derive(Clone, Debug)]
 pub struct Done;
