@@ -13,7 +13,7 @@ impl Status {
     }
   }
 
-  pub fn status(&self) -> HttpResponse {
+  pub async fn status(&self) -> HttpResponse {
     HttpResponse::Ok().json(self)
   }
 }
@@ -21,5 +21,5 @@ impl Status {
 pub fn status_resource<V: ToString>(version: Option<V>) -> Resource {
   let status = Status::new(version);
 
-  web::resource("/status").route(web::get().to(move || status.status()))
+  web::resource("/status").route(web::get().to(|| status.status()))
 }
