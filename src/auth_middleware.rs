@@ -108,7 +108,7 @@ fn extract_scopes_from_headers(headers: &HeaderMap) -> BTreeMap<String, Vec<Stri
 
       if let Ok(value) = v.to_str() {
         let mut existing_scopes = scopes.get_mut(&service).unwrap_or(&mut vec![]).to_vec();
-        existing_scopes.push(value.to_string());
+        existing_scopes.splice(..0, [value.to_string()]);
 
         scopes.insert(service, existing_scopes);
       };
