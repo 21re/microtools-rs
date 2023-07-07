@@ -1,4 +1,6 @@
-use actix_web::{web, HttpResponse, Resource};
+use std::sync::Arc;
+
+use actix_web::{web, HttpResponse, Resource, Responder};
 use serde_derive::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -13,13 +15,21 @@ impl Status {
     }
   }
 
-  pub fn status(&self) -> HttpResponse {
+  pub async fn status(&self) -> HttpResponse {
     HttpResponse::Ok().json(self)
   }
 }
 
+async fn status_handler(status: web::Data<Arc<Status>>) -> impl Responder {
+  let status = status.as_ref();
+  HttpResponse::Ok().json(status)
+}
+
 pub fn status_resource<V: ToString>(version: Option<V>) -> Resource {
   let status = Status::new(version);
+  let shared_status = Arc::new(status);
 
-  web::resource("/status").route(web::get().to(move || status.status()))
+  web::resource("/status")
+    .app_data(shared_status)
+    .route(web::get().to(status_handler))
 }
