@@ -30,6 +30,6 @@ pub fn status_resource<V: ToString>(version: Option<V>) -> Resource {
   let shared_status = Arc::new(status);
 
   web::resource("/status")
-    .app_data(shared_status.clone())
+    .app_data(shared_status)
     .route(web::get().to(status_handler))
 }

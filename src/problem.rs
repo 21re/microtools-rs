@@ -85,7 +85,7 @@ impl actix_web::ResponseError for Problem {
   }
 
   fn error_response(&self) -> actix_web::HttpResponse {
-    HttpResponseBuilder::new(self.status_code()).json(&self)
+    HttpResponseBuilder::new(self.status_code()).json(self)
   }
 }
 
