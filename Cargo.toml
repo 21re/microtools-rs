@@ -1,6 +1,6 @@
 [package]
 name = "microtools"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Bodo Junglas <junglas@objectcode.de>", "Ihor Mordashev <ihor.mordashev@21re.de", "Andrew Ward <andrew.ward@21re.de>"]
 edition = "2021"
 rust-version = "1.70.0"
