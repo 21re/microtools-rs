@@ -8,7 +8,8 @@ rust-version = "1.70.0"
 [dependencies]
 actix = "0.13.0"
 actix-web = { version = "4.3.1", features = ["rustls", "compress-gzip", "cookies", "macros"], default-features = false }
-awc = "3.1.1"
+awc = { version = "3.1.1", features = ["compress-gzip" ], default-features = false }
+actix-http = { version = "3.3.1", features = ["rustls", "compress-gzip"], default-features = false }
 serde = { version = "1.0.164", features = ["rc"] }
 serde_derive = "1.0.164"
 serde_json = "1.0.97"
