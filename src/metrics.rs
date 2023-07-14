@@ -5,7 +5,7 @@ use prometheus::{gather, register, Encoder, HistogramOpts, HistogramVec, TextEnc
 use std::time::Instant;
 
 pub fn metrics_resource() -> Resource {
-  web::resource("/internal/metrics").route(web::get().to(|| {
+  web::resource("/internal/metrics").route(web::get().to(|| async {
     let encoder = TextEncoder::new();
     let metrics = gather();
     let mut buffer = vec![];

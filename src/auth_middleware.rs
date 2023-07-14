@@ -1,10 +1,11 @@
 use super::{AsyncBusinessResult, BusinessResult, Problem};
 use crate::subject::Subject;
+use actix_web::body::BoxBody;
 use actix_web::error::{ErrorForbidden, ErrorUnauthorized};
 use actix_web::http::header::{HeaderMap, HeaderValue};
 use actix_web::FromRequest;
 use actix_web::{
-  dev::{MessageBody, Payload, Service, ServiceRequest, ServiceResponse, Transform},
+  dev::{Payload, Service, ServiceRequest, ServiceResponse, Transform},
   HttpMessage, HttpRequest, HttpResponse, Result,
 };
 use futures::future::{err, ok, Future, Ready};
@@ -43,7 +44,6 @@ pub fn admin_scope(auth_context: &AuthContext) -> bool {
 impl FromRequest for AuthContext {
   type Error = Problem;
   type Future = Ready<Result<AuthContext, Problem>>;
-  type Config = ();
 
   fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
     match req.extensions().get::<AuthContext>() {
@@ -108,7 +108,7 @@ fn extract_scopes_from_headers(headers: &HeaderMap) -> BTreeMap<String, Vec<Stri
 
       if let Ok(value) = v.to_str() {
         let mut existing_scopes = scopes.get_mut(&service).unwrap_or(&mut vec![]).to_vec();
-        existing_scopes.push(value.to_string());
+        existing_scopes.splice(..0, [value.to_string()]);
 
         scopes.insert(service, existing_scopes);
       };
@@ -130,13 +130,11 @@ fn extract_organization(maybe_organization: Option<&HeaderValue>) -> Option<Stri
 #[derive(Default)]
 pub struct AuthMiddlewareFactory();
 
-impl<S, B> Transform<S> for AuthMiddlewareFactory
+impl<S> Transform<S, ServiceRequest> for AuthMiddlewareFactory
 where
-  S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
-  B: MessageBody,
+  S: Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Problem> + 'static,
 {
-  type Request = ServiceRequest;
-  type Response = ServiceResponse<B>;
+  type Response = ServiceResponse<BoxBody>;
   type Error = Problem;
   type InitError = ();
   type Transform = AuthMiddleware<S>;
@@ -151,21 +149,19 @@ pub struct AuthMiddleware<S> {
   service: S,
 }
 
-impl<S, B> Service for AuthMiddleware<S>
+impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
 where
-  S: Service<Request = ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
-  B: MessageBody,
+  S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Problem> + 'static,
 {
-  type Request = ServiceRequest;
   type Response = ServiceResponse<B>;
   type Error = Problem;
   type Future = AsyncBusinessResult<Self::Response>;
 
-  fn poll_ready(&mut self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
+  fn poll_ready(&self, cx: &mut Context) -> Poll<Result<(), Self::Error>> {
     self.service.poll_ready(cx)
   }
 
-  fn call(&mut self, req: ServiceRequest) -> Self::Future {
+  fn call(&self, req: ServiceRequest) -> Self::Future {
     let maybe_subject: Option<&HeaderValue> = req.headers().get(SUBJECT_HEADER_NAME);
     let maybe_token: Option<&HeaderValue> = req.headers().get(TOKEN_HEADER_NAME);
     let maybe_organization: Option<&HeaderValue> = req.headers().get(ORGANIZATION_HEADER_NAME);
